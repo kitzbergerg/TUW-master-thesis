@@ -1,0 +1,12 @@
+[project]
+name = "foundation-model-splitting"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "onnx>=1.17.0",
+    "onnxoptimizer>=0.3.13",
+    "onnxruntime>=1.21.0",
+    "transformers>=4.50.2",
+]
