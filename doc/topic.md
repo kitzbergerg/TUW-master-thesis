@@ -79,35 +79,6 @@ Data science:
 -   EDDS paper: https://github.com/dilina-r/mcts-rec
 -   Any other highly parallelizable task? (e.g. use framework instead of openmp)
 
-## Roadmap
-
-### Foundation
-
--   Exploration of technologies: Investigate wasm-nn, WebGPU, ONNX format and other technologies
--   Local model execution: Implement and benchmark a standalone ML model running in WebAssembly
--   Split small model manually. Run in different WASM modules manually. Verify that output is the same as non-split model. Goal: Understand model architectures better
--   Literature review: Review of distributed inference, WebAssembly performance, and LLM deployment techniques
-
-### Basic distributed system
-
--   Web server implementation: Create a system to serve and coordinate WebAssembly modules
--   Basic task distribution: Implement simple task allocation across multiple clients
--   Performance measurement: Develop metrics and tools for measuring system performance
-
-### Advanced features
-
--   Computational Graph Optimization: Develop an execution flow for distributed inference
--   Model splitting: Implement techniques for partitioning large models across multiple clients
--   Caching strategies: Develop and evaluate different approaches to caching for improved performance
--   Multi User: Allow for multiple users to send inference requests at the same time
--   Incentive mechanism: Design and implement a reward system for resource contribution
-
-### Evaluation
-
--   Case study with LLMs: Implement and evaluate the system using models like Llama 3 or DeepSeek
--   Comparative analysis: Compare your approach with centralized inference and container-based distributed solutions
--   Benchmark development: Create reproducible benchmarks for federated inference systems
-
 ## Notes
 
 -   Maybe interesting for edge devices? Since wasm essentially runs anywhere
