@@ -3,10 +3,10 @@ import onnx
 from optimize_model import optimize_model
 
 
-def split_model(model_name, split_node_names, output_names):
-    input_path = f"model/{model_name}/{model_name}.onnx"
-    output_path_part1 = f"model/{model_name}/p1/{model_name}_p1.onnx"
-    output_path_part2 = f"model/{model_name}/p2/{model_name}_p2.onnx"
+def split_model(split_node_names, output_names):
+    input_path = f"model/gemma3/gemma-3-1b-it.onnx"
+    output_path_part1 = f"model/gemma3/p1/gemma3_p1.onnx"
+    output_path_part2 = f"model/gemma3/p2/gemma3_p2.onnx"
 
     model = onnx.load(input_path)
 
@@ -34,7 +34,6 @@ def split_model(model_name, split_node_names, output_names):
 
 if __name__ == "__main__":
     split_model(
-        "gemma3",
         [
             "/model/model/layers.15/input_layernorm/Cast_output_0",
             "/model/model/layers.11/self_attn/Cast_4_output_0",

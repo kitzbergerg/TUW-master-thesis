@@ -1,0 +1,1160 @@
+{
+  "full": [
+    {
+      "path": "model.model.embed_tokens.weight",
+      "data": "model/gemma3/model.model.embed_tokens.weight"
+    },
+    {
+      "path": "onnx__MatMul_10018",
+      "data": "model/gemma3/onnx__MatMul_10018"
+    },
+    {
+      "path": "onnx__MatMul_10023",
+      "data": "model/gemma3/onnx__MatMul_10023"
+    },
+    {
+      "path": "onnx__MatMul_10024",
+      "data": "model/gemma3/onnx__MatMul_10024"
+    },
+    {
+      "path": "onnx__MatMul_10025",
+      "data": "model/gemma3/onnx__MatMul_10025"
+    },
+    {
+      "path": "onnx__MatMul_10034",
+      "data": "model/gemma3/onnx__MatMul_10034"
+    },
+    {
+      "path": "onnx__MatMul_10041",
+      "data": "model/gemma3/onnx__MatMul_10041"
+    },
+    {
+      "path": "onnx__MatMul_10042",
+      "data": "model/gemma3/onnx__MatMul_10042"
+    },
+    {
+      "path": "onnx__MatMul_10065",
+      "data": "model/gemma3/onnx__MatMul_10065"
+    },
+    {
+      "path": "onnx__MatMul_10070",
+      "data": "model/gemma3/onnx__MatMul_10070"
+    },
+    {
+      "path": "onnx__MatMul_10071",
+      "data": "model/gemma3/onnx__MatMul_10071"
+    },
+    {
+      "path": "onnx__MatMul_10072",
+      "data": "model/gemma3/onnx__MatMul_10072"
+    },
+    {
+      "path": "onnx__MatMul_10081",
+      "data": "model/gemma3/onnx__MatMul_10081"
+    },
+    {
+      "path": "onnx__MatMul_10088",
+      "data": "model/gemma3/onnx__MatMul_10088"
+    },
+    {
+      "path": "onnx__MatMul_10089",
+      "data": "model/gemma3/onnx__MatMul_10089"
+    },
+    {
+      "path": "onnx__MatMul_10112",
+      "data": "model/gemma3/onnx__MatMul_10112"
+    },
+    {
+      "path": "onnx__MatMul_10117",
+      "data": "model/gemma3/onnx__MatMul_10117"
+    },
+    {
+      "path": "onnx__MatMul_10118",
+      "data": "model/gemma3/onnx__MatMul_10118"
+    },
+    {
+      "path": "onnx__MatMul_10119",
+      "data": "model/gemma3/onnx__MatMul_10119"
+    },
+    {
+      "path": "onnx__MatMul_10128",
+      "data": "model/gemma3/onnx__MatMul_10128"
+    },
+    {
+      "path": "onnx__MatMul_10135",
+      "data": "model/gemma3/onnx__MatMul_10135"
+    },
+    {
+      "path": "onnx__MatMul_10136",
+      "data": "model/gemma3/onnx__MatMul_10136"
+    },
+    {
+      "path": "onnx__MatMul_10159",
+      "data": "model/gemma3/onnx__MatMul_10159"
+    },
+    {
+      "path": "onnx__MatMul_10164",
+      "data": "model/gemma3/onnx__MatMul_10164"
+    },
+    {
+      "path": "onnx__MatMul_10165",
+      "data": "model/gemma3/onnx__MatMul_10165"
+    },
+    {
+      "path": "onnx__MatMul_10166",
+      "data": "model/gemma3/onnx__MatMul_10166"
+    },
+    {
+      "path": "onnx__MatMul_10175",
+      "data": "model/gemma3/onnx__MatMul_10175"
+    },
+    {
+      "path": "onnx__MatMul_10182",
+      "data": "model/gemma3/onnx__MatMul_10182"
+    },
+    {
+      "path": "onnx__MatMul_10183",
+      "data": "model/gemma3/onnx__MatMul_10183"
+    },
+    {
+      "path": "onnx__MatMul_10206",
+      "data": "model/gemma3/onnx__MatMul_10206"
+    },
+    {
+      "path": "onnx__MatMul_10211",
+      "data": "model/gemma3/onnx__MatMul_10211"
+    },
+    {
+      "path": "onnx__MatMul_10212",
+      "data": "model/gemma3/onnx__MatMul_10212"
+    },
+    {
+      "path": "onnx__MatMul_10213",
+      "data": "model/gemma3/onnx__MatMul_10213"
+    },
+    {
+      "path": "onnx__MatMul_10218",
+      "data": "model/gemma3/onnx__MatMul_10218"
+    },
+    {
+      "path": "onnx__MatMul_10225",
+      "data": "model/gemma3/onnx__MatMul_10225"
+    },
+    {
+      "path": "onnx__MatMul_10226",
+      "data": "model/gemma3/onnx__MatMul_10226"
+    },
+    {
+      "path": "onnx__MatMul_10249",
+      "data": "model/gemma3/onnx__MatMul_10249"
+    },
+    {
+      "path": "onnx__MatMul_10254",
+      "data": "model/gemma3/onnx__MatMul_10254"
+    },
+    {
+      "path": "onnx__MatMul_10255",
+      "data": "model/gemma3/onnx__MatMul_10255"
+    },
+    {
+      "path": "onnx__MatMul_10256",
+      "data": "model/gemma3/onnx__MatMul_10256"
+    },
+    {
+      "path": "onnx__MatMul_10265",
+      "data": "model/gemma3/onnx__MatMul_10265"
+    },
+    {
+      "path": "onnx__MatMul_10272",
+      "data": "model/gemma3/onnx__MatMul_10272"
+    },
+    {
+      "path": "onnx__MatMul_10273",
+      "data": "model/gemma3/onnx__MatMul_10273"
+    },
+    {
+      "path": "onnx__MatMul_10296",
+      "data": "model/gemma3/onnx__MatMul_10296"
+    },
+    {
+      "path": "onnx__MatMul_10301",
+      "data": "model/gemma3/onnx__MatMul_10301"
+    },
+    {
+      "path": "onnx__MatMul_10302",
+      "data": "model/gemma3/onnx__MatMul_10302"
+    },
+    {
+      "path": "onnx__MatMul_10303",
+      "data": "model/gemma3/onnx__MatMul_10303"
+    },
+    {
+      "path": "onnx__MatMul_10312",
+      "data": "model/gemma3/onnx__MatMul_10312"
+    },
+    {
+      "path": "onnx__MatMul_10319",
+      "data": "model/gemma3/onnx__MatMul_10319"
+    },
+    {
+      "path": "onnx__MatMul_10320",
+      "data": "model/gemma3/onnx__MatMul_10320"
+    },
+    {
+      "path": "onnx__MatMul_10343",
+      "data": "model/gemma3/onnx__MatMul_10343"
+    },
+    {
+      "path": "onnx__MatMul_10348",
+      "data": "model/gemma3/onnx__MatMul_10348"
+    },
+    {
+      "path": "onnx__MatMul_10349",
+      "data": "model/gemma3/onnx__MatMul_10349"
+    },
+    {
+      "path": "onnx__MatMul_10350",
+      "data": "model/gemma3/onnx__MatMul_10350"
+    },
+    {
+      "path": "onnx__MatMul_10359",
+      "data": "model/gemma3/onnx__MatMul_10359"
+    },
+    {
+      "path": "onnx__MatMul_10366",
+      "data": "model/gemma3/onnx__MatMul_10366"
+    },
+    {
+      "path": "onnx__MatMul_10367",
+      "data": "model/gemma3/onnx__MatMul_10367"
+    },
+    {
+      "path": "onnx__MatMul_10390",
+      "data": "model/gemma3/onnx__MatMul_10390"
+    },
+    {
+      "path": "onnx__MatMul_10395",
+      "data": "model/gemma3/onnx__MatMul_10395"
+    },
+    {
+      "path": "onnx__MatMul_10396",
+      "data": "model/gemma3/onnx__MatMul_10396"
+    },
+    {
+      "path": "onnx__MatMul_10397",
+      "data": "model/gemma3/onnx__MatMul_10397"
+    },
+    {
+      "path": "onnx__MatMul_10406",
+      "data": "model/gemma3/onnx__MatMul_10406"
+    },
+    {
+      "path": "onnx__MatMul_10413",
+      "data": "model/gemma3/onnx__MatMul_10413"
+    },
+    {
+      "path": "onnx__MatMul_10414",
+      "data": "model/gemma3/onnx__MatMul_10414"
+    },
+    {
+      "path": "onnx__MatMul_10437",
+      "data": "model/gemma3/onnx__MatMul_10437"
+    },
+    {
+      "path": "onnx__MatMul_10442",
+      "data": "model/gemma3/onnx__MatMul_10442"
+    },
+    {
+      "path": "onnx__MatMul_10443",
+      "data": "model/gemma3/onnx__MatMul_10443"
+    },
+    {
+      "path": "onnx__MatMul_10444",
+      "data": "model/gemma3/onnx__MatMul_10444"
+    },
+    {
+      "path": "onnx__MatMul_10453",
+      "data": "model/gemma3/onnx__MatMul_10453"
+    },
+    {
+      "path": "onnx__MatMul_10460",
+      "data": "model/gemma3/onnx__MatMul_10460"
+    },
+    {
+      "path": "onnx__MatMul_10461",
+      "data": "model/gemma3/onnx__MatMul_10461"
+    },
+    {
+      "path": "onnx__MatMul_10484",
+      "data": "model/gemma3/onnx__MatMul_10484"
+    },
+    {
+      "path": "onnx__MatMul_10489",
+      "data": "model/gemma3/onnx__MatMul_10489"
+    },
+    {
+      "path": "onnx__MatMul_10490",
+      "data": "model/gemma3/onnx__MatMul_10490"
+    },
+    {
+      "path": "onnx__MatMul_10491",
+      "data": "model/gemma3/onnx__MatMul_10491"
+    },
+    {
+      "path": "onnx__MatMul_10496",
+      "data": "model/gemma3/onnx__MatMul_10496"
+    },
+    {
+      "path": "onnx__MatMul_10503",
+      "data": "model/gemma3/onnx__MatMul_10503"
+    },
+    {
+      "path": "onnx__MatMul_10504",
+      "data": "model/gemma3/onnx__MatMul_10504"
+    },
+    {
+      "path": "onnx__MatMul_10527",
+      "data": "model/gemma3/onnx__MatMul_10527"
+    },
+    {
+      "path": "onnx__MatMul_10532",
+      "data": "model/gemma3/onnx__MatMul_10532"
+    },
+    {
+      "path": "onnx__MatMul_10533",
+      "data": "model/gemma3/onnx__MatMul_10533"
+    },
+    {
+      "path": "onnx__MatMul_10534",
+      "data": "model/gemma3/onnx__MatMul_10534"
+    },
+    {
+      "path": "onnx__MatMul_10543",
+      "data": "model/gemma3/onnx__MatMul_10543"
+    },
+    {
+      "path": "onnx__MatMul_10550",
+      "data": "model/gemma3/onnx__MatMul_10550"
+    },
+    {
+      "path": "onnx__MatMul_10551",
+      "data": "model/gemma3/onnx__MatMul_10551"
+    },
+    {
+      "path": "onnx__MatMul_10574",
+      "data": "model/gemma3/onnx__MatMul_10574"
+    },
+    {
+      "path": "onnx__MatMul_10579",
+      "data": "model/gemma3/onnx__MatMul_10579"
+    },
+    {
+      "path": "onnx__MatMul_10580",
+      "data": "model/gemma3/onnx__MatMul_10580"
+    },
+    {
+      "path": "onnx__MatMul_10581",
+      "data": "model/gemma3/onnx__MatMul_10581"
+    },
+    {
+      "path": "onnx__MatMul_10590",
+      "data": "model/gemma3/onnx__MatMul_10590"
+    },
+    {
+      "path": "onnx__MatMul_10597",
+      "data": "model/gemma3/onnx__MatMul_10597"
+    },
+    {
+      "path": "onnx__MatMul_10598",
+      "data": "model/gemma3/onnx__MatMul_10598"
+    },
+    {
+      "path": "onnx__MatMul_10621",
+      "data": "model/gemma3/onnx__MatMul_10621"
+    },
+    {
+      "path": "onnx__MatMul_10626",
+      "data": "model/gemma3/onnx__MatMul_10626"
+    },
+    {
+      "path": "onnx__MatMul_10627",
+      "data": "model/gemma3/onnx__MatMul_10627"
+    },
+    {
+      "path": "onnx__MatMul_10628",
+      "data": "model/gemma3/onnx__MatMul_10628"
+    },
+    {
+      "path": "onnx__MatMul_10637",
+      "data": "model/gemma3/onnx__MatMul_10637"
+    },
+    {
+      "path": "onnx__MatMul_10644",
+      "data": "model/gemma3/onnx__MatMul_10644"
+    },
+    {
+      "path": "onnx__MatMul_10645",
+      "data": "model/gemma3/onnx__MatMul_10645"
+    },
+    {
+      "path": "onnx__MatMul_10668",
+      "data": "model/gemma3/onnx__MatMul_10668"
+    },
+    {
+      "path": "onnx__MatMul_10673",
+      "data": "model/gemma3/onnx__MatMul_10673"
+    },
+    {
+      "path": "onnx__MatMul_10674",
+      "data": "model/gemma3/onnx__MatMul_10674"
+    },
+    {
+      "path": "onnx__MatMul_10675",
+      "data": "model/gemma3/onnx__MatMul_10675"
+    },
+    {
+      "path": "onnx__MatMul_10684",
+      "data": "model/gemma3/onnx__MatMul_10684"
+    },
+    {
+      "path": "onnx__MatMul_10691",
+      "data": "model/gemma3/onnx__MatMul_10691"
+    },
+    {
+      "path": "onnx__MatMul_10692",
+      "data": "model/gemma3/onnx__MatMul_10692"
+    },
+    {
+      "path": "onnx__MatMul_10715",
+      "data": "model/gemma3/onnx__MatMul_10715"
+    },
+    {
+      "path": "onnx__MatMul_10720",
+      "data": "model/gemma3/onnx__MatMul_10720"
+    },
+    {
+      "path": "onnx__MatMul_10721",
+      "data": "model/gemma3/onnx__MatMul_10721"
+    },
+    {
+      "path": "onnx__MatMul_10722",
+      "data": "model/gemma3/onnx__MatMul_10722"
+    },
+    {
+      "path": "onnx__MatMul_10731",
+      "data": "model/gemma3/onnx__MatMul_10731"
+    },
+    {
+      "path": "onnx__MatMul_10738",
+      "data": "model/gemma3/onnx__MatMul_10738"
+    },
+    {
+      "path": "onnx__MatMul_10739",
+      "data": "model/gemma3/onnx__MatMul_10739"
+    },
+    {
+      "path": "onnx__MatMul_10762",
+      "data": "model/gemma3/onnx__MatMul_10762"
+    },
+    {
+      "path": "onnx__MatMul_10767",
+      "data": "model/gemma3/onnx__MatMul_10767"
+    },
+    {
+      "path": "onnx__MatMul_10768",
+      "data": "model/gemma3/onnx__MatMul_10768"
+    },
+    {
+      "path": "onnx__MatMul_10769",
+      "data": "model/gemma3/onnx__MatMul_10769"
+    },
+    {
+      "path": "onnx__MatMul_10774",
+      "data": "model/gemma3/onnx__MatMul_10774"
+    },
+    {
+      "path": "onnx__MatMul_10781",
+      "data": "model/gemma3/onnx__MatMul_10781"
+    },
+    {
+      "path": "onnx__MatMul_10782",
+      "data": "model/gemma3/onnx__MatMul_10782"
+    },
+    {
+      "path": "onnx__MatMul_10805",
+      "data": "model/gemma3/onnx__MatMul_10805"
+    },
+    {
+      "path": "onnx__MatMul_10810",
+      "data": "model/gemma3/onnx__MatMul_10810"
+    },
+    {
+      "path": "onnx__MatMul_10811",
+      "data": "model/gemma3/onnx__MatMul_10811"
+    },
+    {
+      "path": "onnx__MatMul_10812",
+      "data": "model/gemma3/onnx__MatMul_10812"
+    },
+    {
+      "path": "onnx__MatMul_10821",
+      "data": "model/gemma3/onnx__MatMul_10821"
+    },
+    {
+      "path": "onnx__MatMul_10828",
+      "data": "model/gemma3/onnx__MatMul_10828"
+    },
+    {
+      "path": "onnx__MatMul_10829",
+      "data": "model/gemma3/onnx__MatMul_10829"
+    },
+    {
+      "path": "onnx__MatMul_10852",
+      "data": "model/gemma3/onnx__MatMul_10852"
+    },
+    {
+      "path": "onnx__MatMul_10857",
+      "data": "model/gemma3/onnx__MatMul_10857"
+    },
+    {
+      "path": "onnx__MatMul_10858",
+      "data": "model/gemma3/onnx__MatMul_10858"
+    },
+    {
+      "path": "onnx__MatMul_10859",
+      "data": "model/gemma3/onnx__MatMul_10859"
+    },
+    {
+      "path": "onnx__MatMul_10868",
+      "data": "model/gemma3/onnx__MatMul_10868"
+    },
+    {
+      "path": "onnx__MatMul_10875",
+      "data": "model/gemma3/onnx__MatMul_10875"
+    },
+    {
+      "path": "onnx__MatMul_10876",
+      "data": "model/gemma3/onnx__MatMul_10876"
+    },
+    {
+      "path": "onnx__MatMul_10899",
+      "data": "model/gemma3/onnx__MatMul_10899"
+    },
+    {
+      "path": "onnx__MatMul_10904",
+      "data": "model/gemma3/onnx__MatMul_10904"
+    },
+    {
+      "path": "onnx__MatMul_10905",
+      "data": "model/gemma3/onnx__MatMul_10905"
+    },
+    {
+      "path": "onnx__MatMul_10906",
+      "data": "model/gemma3/onnx__MatMul_10906"
+    },
+    {
+      "path": "onnx__MatMul_10911",
+      "data": "model/gemma3/onnx__MatMul_10911"
+    },
+    {
+      "path": "onnx__MatMul_9709",
+      "data": "model/gemma3/onnx__MatMul_9709"
+    },
+    {
+      "path": "onnx__MatMul_9716",
+      "data": "model/gemma3/onnx__MatMul_9716"
+    },
+    {
+      "path": "onnx__MatMul_9717",
+      "data": "model/gemma3/onnx__MatMul_9717"
+    },
+    {
+      "path": "onnx__MatMul_9740",
+      "data": "model/gemma3/onnx__MatMul_9740"
+    },
+    {
+      "path": "onnx__MatMul_9745",
+      "data": "model/gemma3/onnx__MatMul_9745"
+    },
+    {
+      "path": "onnx__MatMul_9746",
+      "data": "model/gemma3/onnx__MatMul_9746"
+    },
+    {
+      "path": "onnx__MatMul_9747",
+      "data": "model/gemma3/onnx__MatMul_9747"
+    },
+    {
+      "path": "onnx__MatMul_9756",
+      "data": "model/gemma3/onnx__MatMul_9756"
+    },
+    {
+      "path": "onnx__MatMul_9763",
+      "data": "model/gemma3/onnx__MatMul_9763"
+    },
+    {
+      "path": "onnx__MatMul_9764",
+      "data": "model/gemma3/onnx__MatMul_9764"
+    },
+    {
+      "path": "onnx__MatMul_9787",
+      "data": "model/gemma3/onnx__MatMul_9787"
+    },
+    {
+      "path": "onnx__MatMul_9792",
+      "data": "model/gemma3/onnx__MatMul_9792"
+    },
+    {
+      "path": "onnx__MatMul_9793",
+      "data": "model/gemma3/onnx__MatMul_9793"
+    },
+    {
+      "path": "onnx__MatMul_9794",
+      "data": "model/gemma3/onnx__MatMul_9794"
+    },
+    {
+      "path": "onnx__MatMul_9803",
+      "data": "model/gemma3/onnx__MatMul_9803"
+    },
+    {
+      "path": "onnx__MatMul_9810",
+      "data": "model/gemma3/onnx__MatMul_9810"
+    },
+    {
+      "path": "onnx__MatMul_9811",
+      "data": "model/gemma3/onnx__MatMul_9811"
+    },
+    {
+      "path": "onnx__MatMul_9834",
+      "data": "model/gemma3/onnx__MatMul_9834"
+    },
+    {
+      "path": "onnx__MatMul_9839",
+      "data": "model/gemma3/onnx__MatMul_9839"
+    },
+    {
+      "path": "onnx__MatMul_9840",
+      "data": "model/gemma3/onnx__MatMul_9840"
+    },
+    {
+      "path": "onnx__MatMul_9841",
+      "data": "model/gemma3/onnx__MatMul_9841"
+    },
+    {
+      "path": "onnx__MatMul_9850",
+      "data": "model/gemma3/onnx__MatMul_9850"
+    },
+    {
+      "path": "onnx__MatMul_9857",
+      "data": "model/gemma3/onnx__MatMul_9857"
+    },
+    {
+      "path": "onnx__MatMul_9858",
+      "data": "model/gemma3/onnx__MatMul_9858"
+    },
+    {
+      "path": "onnx__MatMul_9881",
+      "data": "model/gemma3/onnx__MatMul_9881"
+    },
+    {
+      "path": "onnx__MatMul_9886",
+      "data": "model/gemma3/onnx__MatMul_9886"
+    },
+    {
+      "path": "onnx__MatMul_9887",
+      "data": "model/gemma3/onnx__MatMul_9887"
+    },
+    {
+      "path": "onnx__MatMul_9888",
+      "data": "model/gemma3/onnx__MatMul_9888"
+    },
+    {
+      "path": "onnx__MatMul_9897",
+      "data": "model/gemma3/onnx__MatMul_9897"
+    },
+    {
+      "path": "onnx__MatMul_9904",
+      "data": "model/gemma3/onnx__MatMul_9904"
+    },
+    {
+      "path": "onnx__MatMul_9905",
+      "data": "model/gemma3/onnx__MatMul_9905"
+    },
+    {
+      "path": "onnx__MatMul_9928",
+      "data": "model/gemma3/onnx__MatMul_9928"
+    },
+    {
+      "path": "onnx__MatMul_9933",
+      "data": "model/gemma3/onnx__MatMul_9933"
+    },
+    {
+      "path": "onnx__MatMul_9934",
+      "data": "model/gemma3/onnx__MatMul_9934"
+    },
+    {
+      "path": "onnx__MatMul_9935",
+      "data": "model/gemma3/onnx__MatMul_9935"
+    },
+    {
+      "path": "onnx__MatMul_9940",
+      "data": "model/gemma3/onnx__MatMul_9940"
+    },
+    {
+      "path": "onnx__MatMul_9947",
+      "data": "model/gemma3/onnx__MatMul_9947"
+    },
+    {
+      "path": "onnx__MatMul_9948",
+      "data": "model/gemma3/onnx__MatMul_9948"
+    },
+    {
+      "path": "onnx__MatMul_9971",
+      "data": "model/gemma3/onnx__MatMul_9971"
+    },
+    {
+      "path": "onnx__MatMul_9976",
+      "data": "model/gemma3/onnx__MatMul_9976"
+    },
+    {
+      "path": "onnx__MatMul_9977",
+      "data": "model/gemma3/onnx__MatMul_9977"
+    },
+    {
+      "path": "onnx__MatMul_9978",
+      "data": "model/gemma3/onnx__MatMul_9978"
+    },
+    {
+      "path": "onnx__MatMul_9987",
+      "data": "model/gemma3/onnx__MatMul_9987"
+    },
+    {
+      "path": "onnx__MatMul_9994",
+      "data": "model/gemma3/onnx__MatMul_9994"
+    },
+    {
+      "path": "onnx__MatMul_9995",
+      "data": "model/gemma3/onnx__MatMul_9995"
+    },
+    {
+      "path": "onnx__Mul_10020",
+      "data": "model/gemma3/onnx__Mul_10020"
+    },
+    {
+      "path": "onnx__Mul_10022",
+      "data": "model/gemma3/onnx__Mul_10022"
+    },
+    {
+      "path": "onnx__Mul_10027",
+      "data": "model/gemma3/onnx__Mul_10027"
+    },
+    {
+      "path": "onnx__Mul_10033",
+      "data": "model/gemma3/onnx__Mul_10033"
+    },
+    {
+      "path": "onnx__Mul_10067",
+      "data": "model/gemma3/onnx__Mul_10067"
+    },
+    {
+      "path": "onnx__Mul_10069",
+      "data": "model/gemma3/onnx__Mul_10069"
+    },
+    {
+      "path": "onnx__Mul_10074",
+      "data": "model/gemma3/onnx__Mul_10074"
+    },
+    {
+      "path": "onnx__Mul_10080",
+      "data": "model/gemma3/onnx__Mul_10080"
+    },
+    {
+      "path": "onnx__Mul_10114",
+      "data": "model/gemma3/onnx__Mul_10114"
+    },
+    {
+      "path": "onnx__Mul_10116",
+      "data": "model/gemma3/onnx__Mul_10116"
+    },
+    {
+      "path": "onnx__Mul_10121",
+      "data": "model/gemma3/onnx__Mul_10121"
+    },
+    {
+      "path": "onnx__Mul_10127",
+      "data": "model/gemma3/onnx__Mul_10127"
+    },
+    {
+      "path": "onnx__Mul_10161",
+      "data": "model/gemma3/onnx__Mul_10161"
+    },
+    {
+      "path": "onnx__Mul_10163",
+      "data": "model/gemma3/onnx__Mul_10163"
+    },
+    {
+      "path": "onnx__Mul_10168",
+      "data": "model/gemma3/onnx__Mul_10168"
+    },
+    {
+      "path": "onnx__Mul_10174",
+      "data": "model/gemma3/onnx__Mul_10174"
+    },
+    {
+      "path": "onnx__Mul_10208",
+      "data": "model/gemma3/onnx__Mul_10208"
+    },
+    {
+      "path": "onnx__Mul_10210",
+      "data": "model/gemma3/onnx__Mul_10210"
+    },
+    {
+      "path": "onnx__Mul_10215",
+      "data": "model/gemma3/onnx__Mul_10215"
+    },
+    {
+      "path": "onnx__Mul_10217",
+      "data": "model/gemma3/onnx__Mul_10217"
+    },
+    {
+      "path": "onnx__Mul_10251",
+      "data": "model/gemma3/onnx__Mul_10251"
+    },
+    {
+      "path": "onnx__Mul_10253",
+      "data": "model/gemma3/onnx__Mul_10253"
+    },
+    {
+      "path": "onnx__Mul_10258",
+      "data": "model/gemma3/onnx__Mul_10258"
+    },
+    {
+      "path": "onnx__Mul_10264",
+      "data": "model/gemma3/onnx__Mul_10264"
+    },
+    {
+      "path": "onnx__Mul_10298",
+      "data": "model/gemma3/onnx__Mul_10298"
+    },
+    {
+      "path": "onnx__Mul_10300",
+      "data": "model/gemma3/onnx__Mul_10300"
+    },
+    {
+      "path": "onnx__Mul_10305",
+      "data": "model/gemma3/onnx__Mul_10305"
+    },
+    {
+      "path": "onnx__Mul_10311",
+      "data": "model/gemma3/onnx__Mul_10311"
+    },
+    {
+      "path": "onnx__Mul_10345",
+      "data": "model/gemma3/onnx__Mul_10345"
+    },
+    {
+      "path": "onnx__Mul_10347",
+      "data": "model/gemma3/onnx__Mul_10347"
+    },
+    {
+      "path": "onnx__Mul_10352",
+      "data": "model/gemma3/onnx__Mul_10352"
+    },
+    {
+      "path": "onnx__Mul_10358",
+      "data": "model/gemma3/onnx__Mul_10358"
+    },
+    {
+      "path": "onnx__Mul_10392",
+      "data": "model/gemma3/onnx__Mul_10392"
+    },
+    {
+      "path": "onnx__Mul_10394",
+      "data": "model/gemma3/onnx__Mul_10394"
+    },
+    {
+      "path": "onnx__Mul_10399",
+      "data": "model/gemma3/onnx__Mul_10399"
+    },
+    {
+      "path": "onnx__Mul_10405",
+      "data": "model/gemma3/onnx__Mul_10405"
+    },
+    {
+      "path": "onnx__Mul_10439",
+      "data": "model/gemma3/onnx__Mul_10439"
+    },
+    {
+      "path": "onnx__Mul_10441",
+      "data": "model/gemma3/onnx__Mul_10441"
+    },
+    {
+      "path": "onnx__Mul_10446",
+      "data": "model/gemma3/onnx__Mul_10446"
+    },
+    {
+      "path": "onnx__Mul_10452",
+      "data": "model/gemma3/onnx__Mul_10452"
+    },
+    {
+      "path": "onnx__Mul_10486",
+      "data": "model/gemma3/onnx__Mul_10486"
+    },
+    {
+      "path": "onnx__Mul_10488",
+      "data": "model/gemma3/onnx__Mul_10488"
+    },
+    {
+      "path": "onnx__Mul_10493",
+      "data": "model/gemma3/onnx__Mul_10493"
+    },
+    {
+      "path": "onnx__Mul_10495",
+      "data": "model/gemma3/onnx__Mul_10495"
+    },
+    {
+      "path": "onnx__Mul_10529",
+      "data": "model/gemma3/onnx__Mul_10529"
+    },
+    {
+      "path": "onnx__Mul_10531",
+      "data": "model/gemma3/onnx__Mul_10531"
+    },
+    {
+      "path": "onnx__Mul_10536",
+      "data": "model/gemma3/onnx__Mul_10536"
+    },
+    {
+      "path": "onnx__Mul_10542",
+      "data": "model/gemma3/onnx__Mul_10542"
+    },
+    {
+      "path": "onnx__Mul_10576",
+      "data": "model/gemma3/onnx__Mul_10576"
+    },
+    {
+      "path": "onnx__Mul_10578",
+      "data": "model/gemma3/onnx__Mul_10578"
+    },
+    {
+      "path": "onnx__Mul_10583",
+      "data": "model/gemma3/onnx__Mul_10583"
+    },
+    {
+      "path": "onnx__Mul_10589",
+      "data": "model/gemma3/onnx__Mul_10589"
+    },
+    {
+      "path": "onnx__Mul_10623",
+      "data": "model/gemma3/onnx__Mul_10623"
+    },
+    {
+      "path": "onnx__Mul_10625",
+      "data": "model/gemma3/onnx__Mul_10625"
+    },
+    {
+      "path": "onnx__Mul_10630",
+      "data": "model/gemma3/onnx__Mul_10630"
+    },
+    {
+      "path": "onnx__Mul_10636",
+      "data": "model/gemma3/onnx__Mul_10636"
+    },
+    {
+      "path": "onnx__Mul_10670",
+      "data": "model/gemma3/onnx__Mul_10670"
+    },
+    {
+      "path": "onnx__Mul_10672",
+      "data": "model/gemma3/onnx__Mul_10672"
+    },
+    {
+      "path": "onnx__Mul_10677",
+      "data": "model/gemma3/onnx__Mul_10677"
+    },
+    {
+      "path": "onnx__Mul_10683",
+      "data": "model/gemma3/onnx__Mul_10683"
+    },
+    {
+      "path": "onnx__Mul_10717",
+      "data": "model/gemma3/onnx__Mul_10717"
+    },
+    {
+      "path": "onnx__Mul_10719",
+      "data": "model/gemma3/onnx__Mul_10719"
+    },
+    {
+      "path": "onnx__Mul_10724",
+      "data": "model/gemma3/onnx__Mul_10724"
+    },
+    {
+      "path": "onnx__Mul_10730",
+      "data": "model/gemma3/onnx__Mul_10730"
+    },
+    {
+      "path": "onnx__Mul_10764",
+      "data": "model/gemma3/onnx__Mul_10764"
+    },
+    {
+      "path": "onnx__Mul_10766",
+      "data": "model/gemma3/onnx__Mul_10766"
+    },
+    {
+      "path": "onnx__Mul_10771",
+      "data": "model/gemma3/onnx__Mul_10771"
+    },
+    {
+      "path": "onnx__Mul_10773",
+      "data": "model/gemma3/onnx__Mul_10773"
+    },
+    {
+      "path": "onnx__Mul_10807",
+      "data": "model/gemma3/onnx__Mul_10807"
+    },
+    {
+      "path": "onnx__Mul_10809",
+      "data": "model/gemma3/onnx__Mul_10809"
+    },
+    {
+      "path": "onnx__Mul_10814",
+      "data": "model/gemma3/onnx__Mul_10814"
+    },
+    {
+      "path": "onnx__Mul_10820",
+      "data": "model/gemma3/onnx__Mul_10820"
+    },
+    {
+      "path": "onnx__Mul_10854",
+      "data": "model/gemma3/onnx__Mul_10854"
+    },
+    {
+      "path": "onnx__Mul_10856",
+      "data": "model/gemma3/onnx__Mul_10856"
+    },
+    {
+      "path": "onnx__Mul_10861",
+      "data": "model/gemma3/onnx__Mul_10861"
+    },
+    {
+      "path": "onnx__Mul_10867",
+      "data": "model/gemma3/onnx__Mul_10867"
+    },
+    {
+      "path": "onnx__Mul_10901",
+      "data": "model/gemma3/onnx__Mul_10901"
+    },
+    {
+      "path": "onnx__Mul_10903",
+      "data": "model/gemma3/onnx__Mul_10903"
+    },
+    {
+      "path": "onnx__Mul_10908",
+      "data": "model/gemma3/onnx__Mul_10908"
+    },
+    {
+      "path": "onnx__Mul_10910",
+      "data": "model/gemma3/onnx__Mul_10910"
+    },
+    {
+      "path": "onnx__Mul_9708",
+      "data": "model/gemma3/onnx__Mul_9708"
+    },
+    {
+      "path": "onnx__Mul_9742",
+      "data": "model/gemma3/onnx__Mul_9742"
+    },
+    {
+      "path": "onnx__Mul_9744",
+      "data": "model/gemma3/onnx__Mul_9744"
+    },
+    {
+      "path": "onnx__Mul_9749",
+      "data": "model/gemma3/onnx__Mul_9749"
+    },
+    {
+      "path": "onnx__Mul_9755",
+      "data": "model/gemma3/onnx__Mul_9755"
+    },
+    {
+      "path": "onnx__Mul_9789",
+      "data": "model/gemma3/onnx__Mul_9789"
+    },
+    {
+      "path": "onnx__Mul_9791",
+      "data": "model/gemma3/onnx__Mul_9791"
+    },
+    {
+      "path": "onnx__Mul_9796",
+      "data": "model/gemma3/onnx__Mul_9796"
+    },
+    {
+      "path": "onnx__Mul_9802",
+      "data": "model/gemma3/onnx__Mul_9802"
+    },
+    {
+      "path": "onnx__Mul_9836",
+      "data": "model/gemma3/onnx__Mul_9836"
+    },
+    {
+      "path": "onnx__Mul_9838",
+      "data": "model/gemma3/onnx__Mul_9838"
+    },
+    {
+      "path": "onnx__Mul_9843",
+      "data": "model/gemma3/onnx__Mul_9843"
+    },
+    {
+      "path": "onnx__Mul_9849",
+      "data": "model/gemma3/onnx__Mul_9849"
+    },
+    {
+      "path": "onnx__Mul_9883",
+      "data": "model/gemma3/onnx__Mul_9883"
+    },
+    {
+      "path": "onnx__Mul_9885",
+      "data": "model/gemma3/onnx__Mul_9885"
+    },
+    {
+      "path": "onnx__Mul_9890",
+      "data": "model/gemma3/onnx__Mul_9890"
+    },
+    {
+      "path": "onnx__Mul_9896",
+      "data": "model/gemma3/onnx__Mul_9896"
+    },
+    {
+      "path": "onnx__Mul_9930",
+      "data": "model/gemma3/onnx__Mul_9930"
+    },
+    {
+      "path": "onnx__Mul_9932",
+      "data": "model/gemma3/onnx__Mul_9932"
+    },
+    {
+      "path": "onnx__Mul_9937",
+      "data": "model/gemma3/onnx__Mul_9937"
+    },
+    {
+      "path": "onnx__Mul_9939",
+      "data": "model/gemma3/onnx__Mul_9939"
+    },
+    {
+      "path": "onnx__Mul_9973",
+      "data": "model/gemma3/onnx__Mul_9973"
+    },
+    {
+      "path": "onnx__Mul_9975",
+      "data": "model/gemma3/onnx__Mul_9975"
+    },
+    {
+      "path": "onnx__Mul_9980",
+      "data": "model/gemma3/onnx__Mul_9980"
+    },
+    {
+      "path": "onnx__Mul_9986",
+      "data": "model/gemma3/onnx__Mul_9986"
+    }
+  ]
+}

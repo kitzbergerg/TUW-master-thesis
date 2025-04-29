@@ -18,7 +18,7 @@ class SimpleModelWrapper(torch.nn.Module):
         return outputs.logits
 
 
-def convert_to_onnx(model_id='google/gemma-3-1b-it', output_path='model/gemma3/gemma3.onnx'):
+def convert_to_onnx(model_id='google/gemma-3-1b-it', output_path='model/gemma3/gemma-3-1b-it.onnx'):
     model = AutoModelForCausalLM.from_pretrained(model_id, attn_implementation='eager')
     model.eval()
     tokenizer = AutoTokenizer.from_pretrained(model_id)
