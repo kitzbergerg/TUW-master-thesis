@@ -9,11 +9,15 @@ def split_model(split_node_names, output_names):
     output_path_part2 = f"model/gemma3/p2/gemma3_p2.onnx"
 
     model = onnx.load(input_path)
+    print(model.graph.node)
 
     inputs_all = set([node.name for node in model.graph.input])
     inputs_initializers = set([node.name for node in model.graph.initializer])
 
     input_names = list(inputs_all - inputs_initializers)
+    print(input_names)
+    print(split_node_names)
+    print(output_names)
 
     onnx.utils.extract_model(
         input_path,
@@ -42,5 +46,5 @@ if __name__ == "__main__":
             "/model/model/layers.5/self_attn/Unsqueeze_6_output_0",
             "/model/model/layers.5/self_attn/Unsqueeze_7_output_0"
         ],
-        ['logits']
+        ["logits"]
     )

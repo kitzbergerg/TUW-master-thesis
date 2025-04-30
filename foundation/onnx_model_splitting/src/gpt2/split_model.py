@@ -3,10 +3,10 @@ import onnx
 from optimize_model import optimize_model
 
 
-def split_model(model_name, split_node_names, output_names):
-    input_path = f"model/{model_name}/{model_name}.onnx"
-    output_path_part1 = f"model/{model_name}/{model_name}_p1.onnx"
-    output_path_part2 = f"model/{model_name}/{model_name}_p2.onnx"
+def split_model(split_node_names, output_names):
+    input_path = f"model/gpt2/gpt2.onnx"
+    output_path_part1 = f"model/gpt2/gpt2_p1.onnx"
+    output_path_part2 = f"model/gpt2/gpt2_p2.onnx"
 
     model = onnx.load(input_path)
 
@@ -34,7 +34,6 @@ def split_model(model_name, split_node_names, output_names):
 
 if __name__ == "__main__":
     split_model(
-        "gpt2",
         ["/transformer/h.5/Add_output_0", "/transformer/Expand_output_0", "/transformer/Concat_4_output_0"],
-        ['logits']
+        ["logits"]
     )

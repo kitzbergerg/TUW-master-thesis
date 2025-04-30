@@ -2,6 +2,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import onnx
 import onnxruntime
+import tempfile
 
 
 # from huggingface_hub import login
@@ -26,18 +27,24 @@ def convert_to_onnx(model_id='google/gemma-3-1b-it', output_path='model/gemma3/g
     dummy_input = tokenizer.encode("Hello, world!", return_tensors="pt")
 
     try:
-        torch.onnx.export(
-            SimpleModelWrapper(model),
-            dummy_input,
-            output_path,
-            opset_version=18,
-            input_names=['input_ids'],
-            output_names=['logits'],
-            dynamic_axes={
-                'input_ids': {0: 'batch_size', 1: 'sequence'},
-                'logits': {0: 'batch_size', 1: 'sequence'}
-            }
-        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temppath = tmpdir + '/model.onnx'
+            torch.onnx.export(
+                SimpleModelWrapper(model),
+                dummy_input,
+                temppath,
+                opset_version=18,
+                input_names=['input_ids'],
+                output_names=['logits'],
+                dynamic_axes={
+                    'input_ids': {0: 'batch_size', 1: 'sequence'},
+                    'logits': {0: 'batch_size', 1: 'sequence'}
+                },
+                external_data=True,
+                all_tensors_to_one_file=True
+            )
+
+            onnx.save_model(onnx.load(temppath), output_path, save_as_external_data=True, all_tensors_to_one_file=True)
 
         onnx.checker.check_model(output_path)
         print(f"Model successfully converted and saved to {output_path}")
