@@ -1,5 +1,9 @@
 import * as webllm from "@mlc-ai/web-llm";
 
+
+
+let engine: webllm.MLCEngineInterface | undefined = undefined;
+
 function setLabel(id: string, text: string) {
   const label = document.getElementById(id);
   if (label == null) {
@@ -8,23 +12,17 @@ function setLabel(id: string, text: string) {
   label.innerText = text;
 }
 
-async function main() {
+async function loadEngine() {
   const initProgressCallback = (report: webllm.InitProgressReport) => {
     setLabel("init-label", report.text);
   };
   // Option 1: If we do not specify appConfig, we use `prebuiltAppConfig` defined in `config.ts`
-  const selectedModel = "Llama-3.1-8B-Instruct-q4f32_1-MLC";
-  const engine: webllm.MLCEngineInterface = await webllm.CreateMLCEngine(
+  const selectedModel = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
+  const mlc_engine: webllm.MLCEngineInterface = await webllm.CreateMLCEngine(
     selectedModel,
     {
       initProgressCallback: initProgressCallback,
       logLevel: "INFO", // specify the log level
-    },
-    // customize kv cache, use either context_window_size or sliding_window_size (with attention sink)
-    {
-      context_window_size: 2048,
-      // sliding_window_size: 1024,
-      // attention_sink_size: 4,
     },
   );
 
@@ -55,28 +53,40 @@ async function main() {
   //   initProgressCallback: initProgressCallback,
   // });
   // await engine.reload(selectedModel);
-
-  const reply0 = await engine.chat.completions.create({
-    messages: [{ role: "user", content: "List three US states." }],
-    // below configurations are all optional
-    n: 3,
-    temperature: 1.5,
-    max_tokens: 256,
-    // 46510 and 7188 are "California", and 8421 and 51325 are "Texas" in Llama-3.1-8B-Instruct
-    // So we would have a higher chance of seeing the latter two, but never the first in the answer
-    logit_bias: {
-      "46510": -100,
-      "7188": -100,
-      "8421": 5,
-      "51325": 5,
-    },
-    logprobs: true,
-    top_logprobs: 2,
-  });
-  console.log(reply0);
-  console.log(reply0.usage);
-
-  // To change model, either create a new engine via `CreateMLCEngine()`, or call `engine.reload(modelId)`
+  engine = mlc_engine
 }
 
-main();
+async function runModel() {
+  if (engine == undefined) {
+    console.log("model not yet loaded")
+    return
+  }
+
+  const input: HTMLInputElement = document.getElementById("prompt") as HTMLInputElement;
+  const prompt: string = input.value;
+
+  console.log("Running model with prompt: " + prompt)
+  const request: webllm.ChatCompletionRequest = {
+    stream: true,
+    stream_options: { include_usage: true },
+    messages: [{ role: "user", content: prompt }]
+  };
+
+
+  const asyncChunkGenerator = await engine.chat.completions.create(request);
+  let message = "";
+  for await (const chunk of asyncChunkGenerator) {
+    console.log(chunk);
+    message += chunk.choices[0]?.delta?.content || "";
+    setLabel("generate-label", message);
+    if (chunk.usage) {
+      console.log(chunk.usage);
+    }
+  }
+  console.log("Final message:\n", await engine.getMessage());
+}
+
+loadEngine();
+document.getElementById("run-model-btn")?.addEventListener("click", runModel);
+
+// TODO: figure out if I'm doing something wrong. It's currently a lot (seconds/token rather than tokens/second) slower.
