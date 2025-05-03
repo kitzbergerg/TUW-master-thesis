@@ -3,10 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "copy-wasm": "cp model_conversion/dist/libs/gemma-3-1b-it-q4f16_1-webgpu.wasm dist/",
-    "copy-model": "cp -r model_conversion/dist/gemma-3-1b-it-q4f16_1-MLC/* dist/gemma-3-1b-it-q4f16_1-MLC/resolve/main/",
-    "start": "parcel src/get_started.html model_conversion/dist/libs/* model_conversion/dist/gemma-3-1b-it-q4f16_1-MLC/* --port 8888",
-    "build": "parcel build src/get_started.html --dist-dir lib"
+    "start": "parcel ./src/get_started.html models/*-MLC/ --port 8888"
   },
   "devDependencies": {
     "buffer": "^5.7.1",

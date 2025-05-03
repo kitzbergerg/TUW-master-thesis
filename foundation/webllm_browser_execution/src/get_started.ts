@@ -16,24 +16,19 @@ async function loadEngine() {
   const initProgressCallback = (report: webllm.InitProgressReport) => {
     setLabel("init-label", report.text);
   };
-  // Option 1: If we do not specify appConfig, we use `prebuiltAppConfig` defined in `config.ts`
-  /* const selectedModel = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
-  const mlc_engine: webllm.MLCEngineInterface = await webllm.CreateMLCEngine(
-    selectedModel,
-    {
-      initProgressCallback: initProgressCallback,
-      logLevel: "INFO", // specify the log level
-    },
-  ); */
 
-  // Option 2: Specify your own model other than the prebuilt ones
   const appConfig: webllm.AppConfig = {
     model_list: [
       // TODO: doesn't work, prob because of outdate libs. See https://github.com/mlc-ai/web-llm/issues/675
       {
         model_id: "gemma-3",
-        model: "https://huggingface.co/mlc-ai/gemma-3-1b-it-q4f16_1-MLC",
-        model_lib: window.location.origin + "/model_conversion/dist/libs/gemma-3-git-webgpu.wasm",
+        model: window.location.origin + "/models/gemma-3-1b-it-q4f16_1-MLC",
+        model_lib: window.location.origin + "/models/gemma-3-1b-it-q4f16_1-webgpu.wasm",
+      },
+      {
+        model_id: "Qwen3",
+        model: window.location.origin + "/models/Qwen3-4B-q4f16_1-MLC",
+        model_lib: window.location.origin + "/models/Qwen3-4B-q4f16_1-webgpu.wasm",
       },
     ],
   };
@@ -41,7 +36,7 @@ async function loadEngine() {
     "gemma-3",
     { appConfig: appConfig, initProgressCallback: initProgressCallback },
   );
-  
+
   engine = mlc_engine
 }
 

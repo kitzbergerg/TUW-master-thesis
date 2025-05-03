@@ -1,0 +1,16 @@
+set shell := ['bash', '-uc']
+
+export TVM_SOURCE_DIR := '/home/gabriel/Dev/Uni/master_thesis/foundation/webllm_browser_execution/model_conversion/mlc-llm/3rdparty/tvm/'
+export MLC_LLM_SOURCE_DIR := '/home/gabriel/Dev/Uni/master_thesis/foundation/webllm_browser_execution/model_conversion/mlc-llm/'
+
+[working-directory: 'model_conversion']
+clean-model:
+    rm -rf dist/*-MLC dist/libs/*.wasm
+
+clean-webserver:
+    rm -rf dist/
+
+copy-model model='gemma-3-1b-it':
+    mkdir -p dist/models/{{model}}-q4f16_1-MLC/resolve/main/
+    cp -r model_conversion/dist/{{model}}-q4f16_1-MLC/* dist/models/{{model}}-q4f16_1-MLC/resolve/main/
+    cp model_conversion/dist/libs/*.wasm dist/models

@@ -9,6 +9,9 @@
         ],
         "*.model": [
             "@parcel/transformer-raw"
+        ],
+        "*.txt": [
+            "@parcel/transformer-raw"
         ]
     }
 }
