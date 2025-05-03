@@ -9,6 +9,7 @@
 
 ## Basic distributed system
 
+-   [ ] Model splitting: Implement techniques for partitioning large models across multiple clients
 -   [ ] Web server implementation: Create a system to serve and coordinate WebAssembly modules
 -   [ ] Basic task distribution: Implement simple task allocation across multiple clients
 -   [ ] Performance measurement: Develop metrics and tools for measuring system performance
@@ -16,10 +17,8 @@
 ## Advanced features
 
 -   [ ] Computational Graph Optimization: Develop an execution flow for distributed inference
--   [ ] Model splitting: Implement techniques for partitioning large models across multiple clients
 -   [ ] Caching strategies: Develop and evaluate different approaches to caching for improved performance
 -   [ ] Multi User: Allow for multiple users to send inference requests at the same time
--   [ ] Incentive mechanism: Design and implement a reward system for resource contribution
 
 ## Evaluation
 

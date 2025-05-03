@@ -3,6 +3,10 @@
 -   Model Conversion and Splitting
     -   Convert gemma3 to onnx and split
     -   Convert llama4 to onnx and split
+-   WebLLM
+    -   Run basic model using webllm
+    -   Compile and run non-standard model
+    -   Split model and run split model using webllm (if not possible use MLC directly)
 -   Framework and Backend Exploration
     -   Explore onnxruntime-web in more detail. Especially GPU part, it might be difficult to run LLMs using webgpu/webnn efficiently.
     -   Understand WebGPU strengths/weaknesses for LLMs in the browser?
