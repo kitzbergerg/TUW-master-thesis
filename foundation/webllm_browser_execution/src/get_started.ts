@@ -17,42 +17,31 @@ async function loadEngine() {
     setLabel("init-label", report.text);
   };
   // Option 1: If we do not specify appConfig, we use `prebuiltAppConfig` defined in `config.ts`
-  const selectedModel = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
+  /* const selectedModel = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
   const mlc_engine: webllm.MLCEngineInterface = await webllm.CreateMLCEngine(
     selectedModel,
     {
       initProgressCallback: initProgressCallback,
       logLevel: "INFO", // specify the log level
     },
-  );
+  ); */
 
   // Option 2: Specify your own model other than the prebuilt ones
-  // const appConfig: webllm.AppConfig = {
-  //   model_list: [
-  //     {
-  //       model: "https://huggingface.co/mlc-ai/Llama-3.1-8B-Instruct-q4f32_1-MLC",
-  //       model_id: "Llama-3.1-8B-Instruct-q4f32_1-MLC",
-  //       model_lib:
-  //         webllm.modelLibURLPrefix +
-  //         webllm.modelVersion +
-  //         "/Llama-3_1-8B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm",
-  //       overrides: {
-  //         context_window_size: 2048,
-  //       },
-  //     },
-  //   ],
-  // };
-  // const engine: webllm.MLCEngineInterface = await webllm.CreateMLCEngine(
-  //   selectedModel,
-  //   { appConfig: appConfig, initProgressCallback: initProgressCallback },
-  // );
-
-  // Option 3: Instantiate MLCEngine() and call reload() separately
-  // const engine: webllm.MLCEngineInterface = new webllm.MLCEngine({
-  //   appConfig: appConfig, // if do not specify, we use webllm.prebuiltAppConfig
-  //   initProgressCallback: initProgressCallback,
-  // });
-  // await engine.reload(selectedModel);
+  const appConfig: webllm.AppConfig = {
+    model_list: [
+      // TODO: doesn't work, prob because of outdate libs. See https://github.com/mlc-ai/web-llm/issues/675
+      {
+        model_id: "gemma-3",
+        model: "https://huggingface.co/mlc-ai/gemma-3-1b-it-q4f16_1-MLC",
+        model_lib: window.location.origin + "/model_conversion/dist/libs/gemma-3-git-webgpu.wasm",
+      },
+    ],
+  };
+  const mlc_engine: webllm.MLCEngineInterface = await webllm.CreateMLCEngine(
+    "gemma-3",
+    { appConfig: appConfig, initProgressCallback: initProgressCallback },
+  );
+  
   engine = mlc_engine
 }
 
@@ -88,5 +77,3 @@ async function runModel() {
 
 loadEngine();
 document.getElementById("run-model-btn")?.addEventListener("click", runModel);
-
-// TODO: figure out if I'm doing something wrong. It's currently a lot (seconds/token rather than tokens/second) slower.
