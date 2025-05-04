@@ -36,8 +36,7 @@ source ../emsdk/emsdk_env.sh
 
 ```bash
 git clean -fdx
-cd 3rdparty/tvm && git clean -fdx
-cd ../..
+cd 3rdparty/tvm && git clean -fdx && cd ../..
 ```
 
 ### Build tvm
@@ -103,9 +102,9 @@ cd $CURRENT
 export TVM_SOURCE_DIR=`pwd`/mlc-llm/3rdparty/tvm
 export MLC_LLM_SOURCE_DIR=`pwd`/mlc-llm
 
-MODEL_NAME=Llama-3.2-git
-CONV_TEMPLATE=llama-3.2
-QUANT=q4f32_1
+MODEL_NAME=Qwen3-4B
+CONV_TEMPLATE=qwen2
+QUANT=q4f16_1
 mlc_llm convert_weight dist/models/$MODEL_NAME/ --quantization $QUANT -o dist/MLC/$MODEL_NAME-$QUANT-MLC
 mlc_llm gen_config dist/models/$MODEL_NAME/ --prefill-chunk-size 1024 --quantization $QUANT --conv-template $CONV_TEMPLATE -o dist/MLC/$MODEL_NAME-$QUANT-MLC/
 mlc_llm compile dist/MLC/$MODEL_NAME-$QUANT-MLC/mlc-chat-config.json --device webgpu -o dist/libs/$MODEL_NAME-$QUANT-webgpu.wasm
