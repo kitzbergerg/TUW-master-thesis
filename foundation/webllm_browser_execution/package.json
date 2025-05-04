@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "parcel ./src/get_started.html models/*-MLC/ --port 8888"
+    "start": "parcel ./src/get_started.html models/*-MLC/ models/libs/* --port 8888"
   },
   "devDependencies": {
     "buffer": "^5.7.1",

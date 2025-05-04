@@ -2,12 +2,11 @@ set shell := ['bash', '-uc']
 
 [working-directory: 'model_conversion']
 clean-model:
-    rm -rf dist/*-MLC dist/libs/*.wasm
+    rm -rf dist/MLC/* dist/libs/*.wasm
 
-clean-webserver:
+clean:
     rm -rf dist/
 
-copy-model model='gemma-3-1b-it':
-    mkdir -p dist/models/{{model}}-q4f16_1-MLC/resolve/main/
-    cp -r model_conversion/dist/{{model}}-q4f16_1-MLC/* dist/models/{{model}}-q4f16_1-MLC/resolve/main/
-    cp model_conversion/dist/libs/*.wasm dist/models
+copy:
+    mkdir -p dist/models/libs/ && cp model_conversion/dist/libs/* dist/models/libs/
+    ls model_conversion/dist/MLC | xargs -i sh -c "mkdir -p dist/models/MLC/{}/resolve/main/ && cp model_conversion/dist/MLC/{}/* dist/models/MLC/{}/resolve/main/"

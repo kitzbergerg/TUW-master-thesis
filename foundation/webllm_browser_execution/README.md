@@ -94,6 +94,7 @@ conda activate myenv
 
 CURRENT=`pwd`
 cd mlc-llm/python && pip install -e .
+cd $CURRENT
 cd mlc-llm/3rdparty/tvm/python && pip install -e .
 cd $CURRENT
 ```
@@ -102,9 +103,10 @@ cd $CURRENT
 export TVM_SOURCE_DIR=`pwd`/mlc-llm/3rdparty/tvm
 export MLC_LLM_SOURCE_DIR=`pwd`/mlc-llm
 
-MODEL_NAME=gemma-3-1b-it
-CONV_TEMPLATE=gemma3_instruction
-mlc_llm convert_weight ./dist/models/$MODEL_NAME/ --quantization q4f16_1 -o dist/$MODEL_NAME-q4f16_1-MLC
-mlc_llm gen_config ./dist/models/$MODEL_NAME/ --quantization q4f16_1 --conv-template $CONV_TEMPLATE -o dist/$MODEL_NAME-q4f16_1-MLC/
-mlc_llm compile ./dist/$MODEL_NAME-q4f16_1-MLC/mlc-chat-config.json --device webgpu -o dist/libs/$MODEL_NAME-q4f16_1-webgpu.wasm
+MODEL_NAME=Llama-3.2-git
+CONV_TEMPLATE=llama-3.2
+QUANT=q4f32_1
+mlc_llm convert_weight dist/models/$MODEL_NAME/ --quantization $QUANT -o dist/MLC/$MODEL_NAME-$QUANT-MLC
+mlc_llm gen_config dist/models/$MODEL_NAME/ --prefill-chunk-size 1024 --quantization $QUANT --conv-template $CONV_TEMPLATE -o dist/MLC/$MODEL_NAME-$QUANT-MLC/
+mlc_llm compile dist/MLC/$MODEL_NAME-$QUANT-MLC/mlc-chat-config.json --device webgpu -o dist/libs/$MODEL_NAME-$QUANT-webgpu.wasm
 ```
