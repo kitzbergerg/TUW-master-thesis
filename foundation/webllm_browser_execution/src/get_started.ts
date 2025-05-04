@@ -32,10 +32,8 @@ async function loadEngine() {
       },
     ],
   };
-  const mlc_engine: webllm.MLCEngineInterface = await webllm.CreateMLCEngine(
-    "gemma-3",
-    { appConfig: appConfig, initProgressCallback: initProgressCallback },
-  );
+  const mlc_engine: webllm.MLCEngineInterface = await webllm.CreateMLCEngine("gemma-3", { appConfig: appConfig, initProgressCallback: initProgressCallback },);
+  //const mlc_engine: webllm.MLCEngineInterface = await webllm.CreateMLCEngine("Llama-3.2-1B-Instruct-q4f32_1-MLC", { initProgressCallback: initProgressCallback },);
 
   engine = mlc_engine
 }

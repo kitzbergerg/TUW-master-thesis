@@ -1,8 +1,5 @@
 set shell := ['bash', '-uc']
 
-export TVM_SOURCE_DIR := '/home/gabriel/Dev/Uni/master_thesis/foundation/webllm_browser_execution/model_conversion/mlc-llm/3rdparty/tvm/'
-export MLC_LLM_SOURCE_DIR := '/home/gabriel/Dev/Uni/master_thesis/foundation/webllm_browser_execution/model_conversion/mlc-llm/'
-
 [working-directory: 'model_conversion']
 clean-model:
     rm -rf dist/*-MLC dist/libs/*.wasm

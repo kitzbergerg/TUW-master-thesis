@@ -20,37 +20,31 @@ https://tvm.apache.org/docs/install/from_source.html
 https://llm.mlc.ai/docs/install/mlc_llm.html#option-2-build-from-source
 https://llm.mlc.ai/docs/compilation/compile_models.html
 
-### Build mlc
+### Setup
 
 ```bash
-conda env remove -n mlc-chat-venv
-rm -rf python && git checkout HEAD -- python
-rm -rf build
+git clone https://github.com/mlc-ai/mlc-llm.git --recursive
+cd mlc-llm
 
-conda create -n mlc-chat-venv -c conda-forge \
-    "cmake>=3.24,<4" \
-    rust \
-    git \
-    python=3.11
-conda activate mlc-chat-venv
 export TVM_SOURCE_DIR=`pwd`/3rdparty/tvm
 export MLC_LLM_SOURCE_DIR=`pwd`
 source ../emsdk/emsdk_env.sh
 ./web/prep_emcc_deps.sh
-mkdir build && cd build
+```
 
-python ../cmake/gen_cmake_config.py
+### Cleanup (run between builds)
 
-cmake .. && cmake --build . --parallel $(nproc) && cd ..
+```bash
+git clean -fdx
+cd 3rdparty/tvm && git clean -fdx
+cd ../..
 ```
 
 ### Build tvm
 
-```bash
-conda env remove -n tvm-build-venv
-rm -rf python && git checkout HEAD -- python
-rm -rf build
+Execute in `3rdparty/tvm`.
 
+```bash
 conda create -n tvm-build-venv -c conda-forge \
     "llvmdev>=15" \
     "cmake>=3.24,<4" \
@@ -76,6 +70,22 @@ echo "set(USE_ROCM ON)" >> config.cmake
 cmake .. && cmake --build . --parallel $(nproc) && cd ..
 ```
 
+### Build mlc
+
+```bash
+conda create -n mlc-chat-venv -c conda-forge \
+    "cmake>=3.24,<4" \
+    rust \
+    git \
+    python=3.11
+conda activate mlc-chat-venv
+mkdir build && cd build
+
+python ../cmake/gen_cmake_config.py
+
+cmake .. && cmake --build . --parallel $(nproc) && cd ..
+```
+
 ### Compile model
 
 ```bash
@@ -86,6 +96,11 @@ CURRENT=`pwd`
 cd mlc-llm/python && pip install -e .
 cd mlc-llm/3rdparty/tvm/python && pip install -e .
 cd $CURRENT
+```
+
+```bash
+export TVM_SOURCE_DIR=`pwd`/mlc-llm/3rdparty/tvm
+export MLC_LLM_SOURCE_DIR=`pwd`/mlc-llm
 
 MODEL_NAME=gemma-3-1b-it
 CONV_TEMPLATE=gemma3_instruction
