@@ -8,7 +8,7 @@ env.allowRemoteModels = false;
 async function runModel(text) {
     const generator = await pipeline('text-generation', 'gpt2', { device: "webgpu" },);
     return await generator(text, {
-        max_new_tokens: 50,
+        max_new_tokens: 100,
         repetition_penalty: 1.5, // needs to be > 1 otherwise it outputs garbage
     });
 }

@@ -4,6 +4,9 @@ import onnx
 import onnxruntime
 
 
+# Use optimum instead:
+# > optimum-cli export onnx --model gpt2 --opset 18 --optimize O2 model/gpt2/optimum/
+
 def convert_to_onnx(model_name='gpt2', output_path='model/gpt2/gpt2.onnx'):
     model = GPT2LMHeadModel.from_pretrained(model_name)
     model.eval()

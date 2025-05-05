@@ -14,8 +14,6 @@ function argMax(array) {
     return [].reduce.call(array, (m, c, i, arr) => c > arr[m] ? i : m, 0)
 }
 async function runModel(text) {
-    // TODO: figure out how to use webnn (not working)
-    // TODO: use kv cache?
     const session = await createSession('model/gpt2/gpt2.onnx');
     const tokenizer = await AutoTokenizer.from_pretrained('gpt2');
     const vocabSize = 50257;
@@ -54,22 +52,22 @@ async function testModel() {
     const feeds = { input_ids: encoded };
 
     // Test full model
-    const session = await createSession('model/gpt2/gpt2.onnx', 'wasm');
+    const session = await createSession('model/gpt2/gpt2.onnx');
     const out = await session.run(feeds);
     console.log(out);
 
 
     // Test split model
-    const session_p1 = await createSession('model/gpt2/gpt2_p1.onnx', 'wasm');
+    const session_p1 = await createSession('model/gpt2/gpt2_p1.onnx');
     const out_p1 = await session_p1.run(feeds);
     console.log(out_p1);
 
-    const session_p2 = await createSession('model/gpt2/gpt2_p2.onnx', 'wasm');
+    const session_p2 = await createSession('model/gpt2/gpt2_p2.onnx');
     const out_p2 = await session_p2.run(out_p1);
     console.log(out_p2);
 
     // assert
-    console.assert(arrayEquals(out.logits.cpuData, out_p2.logits.cpuData));
+    console.assert(arrayEquals(await out.logits.getData(), await out_p2.logits.getData()));
     console.log("Split gpt2 gives same result as full variant")
 }
 window.testModel = testModel
