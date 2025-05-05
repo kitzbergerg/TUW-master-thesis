@@ -15,13 +15,12 @@ function argMax(array) {
 }
 async function runModel(text) {
     // TODO: figure out how to use webnn (not working)
-    // TODO: figure out how to use webgpu (really slow)
     // TODO: use kv cache?
-    const session = await createSession('model/gpt2/gpt2.onnx', 'cpu', 'wasm');
+    const session = await createSession('model/gpt2/gpt2.onnx', 'cpu', 'webgpu');
 
     const tokenizer = await AutoTokenizer.from_pretrained('gpt2');
     let encoded = await tokenizer(text).input_ids;
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 50; i++) {
         const outputs = await session.run({ input_ids: encoded })
 
         const logits = outputs.logits.cpuData;
