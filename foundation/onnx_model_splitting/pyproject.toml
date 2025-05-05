@@ -8,5 +8,6 @@ dependencies = [
     "onnx>=1.17.0",
     "onnxoptimizer>=0.3.13",
     "onnxruntime>=1.21.0",
+    "optimum[exporters]>=1.17.1",
     "transformers>=4.50.2",
 ]
