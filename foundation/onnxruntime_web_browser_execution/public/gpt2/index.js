@@ -3,10 +3,10 @@ import * as ort from 'onnxruntime-web';
 
 
 
-async function createSession(modelPath, preferredOutputLocation, executionProviders = "webnn") {
+async function createSession(modelPath) {
     return await ort.InferenceSession.create(modelPath, {
-        executionProviders: [executionProviders],
-        preferredOutputLocation: preferredOutputLocation
+        executionProviders: ['webgpu'],
+        preferredOutputLocation: 'gpu-buffer'
     });
 }
 
@@ -16,18 +16,16 @@ function argMax(array) {
 async function runModel(text) {
     // TODO: figure out how to use webnn (not working)
     // TODO: use kv cache?
-    const session = await createSession('model/gpt2/gpt2.onnx', 'cpu', 'webgpu');
-
+    const session = await createSession('model/gpt2/gpt2.onnx');
     const tokenizer = await AutoTokenizer.from_pretrained('gpt2');
+    const vocabSize = 50257;
+
     let encoded = await tokenizer(text).input_ids;
     for (let i = 0; i < 50; i++) {
         const outputs = await session.run({ input_ids: encoded })
 
-        const logits = outputs.logits.cpuData;
-        const vocabSize = outputs.logits.dims[2];
-        const logits_next_token = logits.slice(-vocabSize)
-        const nextToken = argMax(logits_next_token);
-        console.log("Generated token IDs:", nextToken);
+        const logits = await outputs.logits.getData();
+        const nextToken = argMax(logits.slice(-vocabSize));
         console.log(tokenizer.decode([nextToken]))
 
         const data = BigInt64Array.from([...encoded.data, BigInt(nextToken)])
@@ -56,17 +54,17 @@ async function testModel() {
     const feeds = { input_ids: encoded };
 
     // Test full model
-    const session = await createSession('model/gpt2/gpt2.onnx', 'cpu', 'wasm');
+    const session = await createSession('model/gpt2/gpt2.onnx', 'wasm');
     const out = await session.run(feeds);
     console.log(out);
 
 
     // Test split model
-    const session_p1 = await createSession('model/gpt2/gpt2_p1.onnx', 'cpu', 'wasm');
+    const session_p1 = await createSession('model/gpt2/gpt2_p1.onnx', 'wasm');
     const out_p1 = await session_p1.run(feeds);
     console.log(out_p1);
 
-    const session_p2 = await createSession('model/gpt2/gpt2_p2.onnx', 'cpu', 'wasm');
+    const session_p2 = await createSession('model/gpt2/gpt2_p2.onnx', 'wasm');
     const out_p2 = await session_p2.run(out_p1);
     console.log(out_p2);
 
