@@ -4,49 +4,110 @@ import onnx
 import onnxruntime
 
 
+class ModelWrapper(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, input_ids, attention_mask, position_ids, *past_key_values):
+        past = [(past_key_values[i], past_key_values[i + 1]) for i in range(0, len(past_key_values), 2)]
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past if past and past[0][0].size(2) > 0 else None,
+            use_cache=True,
+            return_dict=True
+        )
+        flattened = [kv for layer in outputs.past_key_values for kv in layer]
+        return (outputs.logits,) + tuple(flattened)
+
+
+def create_inputs(model, tokenizer, text="Hello, world!"):
+    input_ids = tokenizer.encode(text, return_tensors="pt")
+    bsz, seq_len = input_ids.shape
+    device = input_ids.device
+
+    attention_mask = torch.ones(bsz, seq_len, dtype=torch.long, device=device)
+    position_ids = torch.arange(seq_len, dtype=torch.long, device=device).unsqueeze(0)
+
+    head_dim = model.config.n_embd // model.config.n_head
+    empty = lambda: torch.zeros(bsz, model.config.n_head, 0, head_dim, device=device)
+
+    return {
+        'input_ids': input_ids,
+        'attention_mask': attention_mask,
+        'position_ids': position_ids,
+        **{f'past_key_{i}': empty() for i in range(model.config.n_layer)},
+        **{f'past_value_{i}': empty() for i in range(model.config.n_layer)}
+    }
+
+
 def convert_to_onnx(model_name='gpt2', output_path='model/gpt2/model_torch.onnx'):
     model = GPT2LMHeadModel.from_pretrained(model_name)
     tokenizer = GPT2Tokenizer.from_pretrained(model_name)
-    input_ids = tokenizer.encode("Hello, world!", return_tensors="pt")
+    wrapped_model = ModelWrapper(model)
+    inputs = create_inputs(model, tokenizer)
+
+    n_layer = model.config.n_layer
+    input_names = list(inputs.keys())
+    output_names = (['logits'] +
+                    [f'present_key_{i}' for i in range(n_layer)] +
+                    [f'present_value_{i}' for i in range(n_layer)])
+
+    dynamic_axes = {
+        'input_ids': {0: 'batch_size', 1: 'sequence_length'},
+        'attention_mask': {0: 'batch_size', 1: 'past_sequence_length + 1'},
+        'position_ids': {0: 'batch_size', 1: 'sequence_length'},
+        'logits': {0: 'batch_size', 1: 'sequence_length', 2: 'vocab_size'},
+
+        **{name: {0: 'batch_size', 2: 'past_sequence_length'} for name in input_names if 'past_' in name},
+        **{name: {0: 'batch_size', 2: 'past_sequence_length'} for name in output_names if 'present_' in name}
+    }
 
     try:
+        input_tuple = tuple(inputs[name] for name in input_names)
         torch.onnx.export(
-            model,
-            input_ids,
+            wrapped_model,
+            input_tuple,
             output_path,
             opset_version=18,
-            input_names=['input_ids'],
-            output_names=['logits'],
-            dynamic_axes={
-                'input_ids': {0: 'batch_size', 1: 'sequence'},
-                'logits': {0: 'batch_size', 1: 'sequence'}
-            }
+            input_names=input_names,
+            output_names=output_names,
+            dynamic_axes=dynamic_axes,
+            do_constant_folding=True,
+            export_params=True
         )
-
         onnx.checker.check_model(output_path)
         print(f"Model successfully converted and saved to {output_path}")
-        verify_onnx_model(output_path, model, input_ids)
+        verify_onnx_model(output_path, wrapped_model, inputs)
+
     except Exception as e:
         print(f"Error converting model to ONNX: {e}")
+        import traceback
+        traceback.print_exc()
 
 
-def verify_onnx_model(onnx_path, pytorch_model, input_ids):
+def verify_onnx_model(onnx_path, pytorch_model, inputs):
     session = onnxruntime.InferenceSession(onnx_path)
-
-    ort_inputs = {session.get_inputs()[0].name: input_ids.numpy()}
-
+    ort_inputs = {i.name: inputs[i.name].numpy() for i in session.get_inputs()}
     ort_outputs = session.run(None, ort_inputs)
 
     with torch.no_grad():
-        pt_outputs = pytorch_model(input_ids)
+        pt_input = tuple(inputs[i.name] for i in session.get_inputs())
+        pt_outputs = pytorch_model(*pt_input)
 
-    onnx_output = torch.tensor(ort_outputs[0])
-    pt_output = pt_outputs.logits
+    def compare(a, b, name):
+        if torch.allclose(a, b, atol=1e-4):
+            print(f"{name} verification successful!")
+        else:
+            print(f"WARNING: {name} differs. Max diff: {(a - b).abs().max()}")
 
-    if torch.allclose(onnx_output, pt_output, atol=1e-5):
-        print("ONNX model verification successful!")
-    else:
-        print("WARNING: ONNX model outputs differ from PyTorch model")
+    compare(torch.tensor(ort_outputs[0]), pt_outputs[0], "Logits")
+
+    for i in range(pytorch_model.model.config.n_layer):
+        compare(torch.tensor(ort_outputs[2 * i + 1]), pt_outputs[2 * i + 1], f"Layer {i} key")
+        compare(torch.tensor(ort_outputs[2 * i + 2]), pt_outputs[2 * i + 2], f"Layer {i} value")
 
 
 if __name__ == "__main__":

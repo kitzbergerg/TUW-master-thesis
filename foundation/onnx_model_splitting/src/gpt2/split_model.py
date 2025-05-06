@@ -27,12 +27,12 @@ def split_model(input_names, split_node_names, output_names):
 
 if __name__ == "__main__":
     split_model(
-        ["input_ids"],
+        ["input_ids", "attention_mask", "position_ids"],
         [
-            "/transformer/h.6/Add_output_0",
+            "/model/transformer/h.6/Add_output_0",
 
-            "/transformer/Expand_output_0",
-            "/transformer/Concat_4_output_0"
+            "/model/transformer/Where_4_output_0",
+            "/model/transformer/Concat_6_output_0"
         ],
         ["logits"]
     )
