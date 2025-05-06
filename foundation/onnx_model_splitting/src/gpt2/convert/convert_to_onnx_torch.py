@@ -23,23 +23,25 @@ class ModelWrapper(torch.nn.Module):
         return (outputs.logits,) + tuple(flattened)
 
 
-def create_inputs(model, tokenizer, text="Hello, world!"):
-    input_ids = tokenizer.encode(text, return_tensors="pt")
-    bsz, seq_len = input_ids.shape
+def create_inputs(model, tokenizer, text="Hello"):
+    inputs = tokenizer(text, return_tensors="pt")
+    input_ids = inputs["input_ids"]
+    attention_mask = inputs["attention_mask"]
+    batch_size, seq_len = input_ids.shape
     device = input_ids.device
 
-    attention_mask = torch.ones(bsz, seq_len, dtype=torch.long, device=device)
+    past_key_values_length = 5
     position_ids = torch.arange(seq_len, dtype=torch.long, device=device).unsqueeze(0)
 
     head_dim = model.config.n_embd // model.config.n_head
-    empty = lambda: torch.zeros(bsz, model.config.n_head, 0, head_dim, device=device)
+    past = lambda: torch.zeros(batch_size, model.config.n_head, past_key_values_length, head_dim, device=device)
 
     return {
         'input_ids': input_ids,
         'attention_mask': attention_mask,
         'position_ids': position_ids,
-        **{f'past_key_{i}': empty() for i in range(model.config.n_layer)},
-        **{f'past_value_{i}': empty() for i in range(model.config.n_layer)}
+        **{f'past_key_values.{i}.key': past() for i in range(model.config.n_layer)},
+        **{f'past_key_values.{i}.value': past() for i in range(model.config.n_layer)}
     }
 
 
@@ -52,8 +54,8 @@ def convert_to_onnx(model_name='gpt2', output_path='model/gpt2/model_torch.onnx'
     n_layer = model.config.n_layer
     input_names = list(inputs.keys())
     output_names = (['logits'] +
-                    [f'present_key_{i}' for i in range(n_layer)] +
-                    [f'present_value_{i}' for i in range(n_layer)])
+                    [f'present.{i}.key' for i in range(n_layer)] +
+                    [f'present.{i}.value' for i in range(n_layer)])
 
     dynamic_axes = {
         'input_ids': {0: 'batch_size', 1: 'sequence_length'},
@@ -61,8 +63,8 @@ def convert_to_onnx(model_name='gpt2', output_path='model/gpt2/model_torch.onnx'
         'position_ids': {0: 'batch_size', 1: 'sequence_length'},
         'logits': {0: 'batch_size', 1: 'sequence_length', 2: 'vocab_size'},
 
-        **{name: {0: 'batch_size', 2: 'past_sequence_length'} for name in input_names if 'past_' in name},
-        **{name: {0: 'batch_size', 2: 'past_sequence_length'} for name in output_names if 'present_' in name}
+        **{name: {0: 'batch_size', 2: 'past_sequence_length'} for name in input_names if 'past_key_values.' in name},
+        **{name: {0: 'batch_size', 2: 'past_sequence_length + 1'} for name in output_names if 'present.' in name}
     }
 
     try:
