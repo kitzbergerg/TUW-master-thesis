@@ -3,17 +3,10 @@ import onnx
 from optimize_model import optimize_model
 
 
-def split_model(split_node_names, output_names):
-    input_path = f"model/gpt2/gpt2.onnx"
+def split_model(input_names, split_node_names, output_names):
+    input_path = f"model/gpt2/model_torch.onnx"
     output_path_part1 = f"model/gpt2/gpt2_p1.onnx"
     output_path_part2 = f"model/gpt2/gpt2_p2.onnx"
-
-    model = onnx.load(input_path)
-
-    inputs_all = set([node.name for node in model.graph.input])
-    inputs_initializers = set([node.name for node in model.graph.initializer])
-
-    input_names = list(inputs_all - inputs_initializers)
 
     onnx.utils.extract_model(
         input_path,
@@ -34,6 +27,12 @@ def split_model(split_node_names, output_names):
 
 if __name__ == "__main__":
     split_model(
-        ["/transformer/h.5/Add_output_0", "/transformer/Expand_output_0", "/transformer/Concat_4_output_0"],
+        ["input_ids"],
+        [
+            "/transformer/h.6/Add_output_0",
+
+            "/transformer/Expand_output_0",
+            "/transformer/Concat_4_output_0"
+        ],
         ["logits"]
     )

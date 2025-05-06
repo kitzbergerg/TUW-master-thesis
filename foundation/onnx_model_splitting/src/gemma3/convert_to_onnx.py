@@ -29,7 +29,7 @@ def convert_to_onnx(model_id='google/gemma-3-1b-it', output_path='model/gemma3/g
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             temppath = tmpdir + '/model.onnx'
-            torch.onnx.export(
+            torch.onnx.expoptimumort(
                 SimpleModelWrapper(model),
                 dummy_input,
                 temppath,
