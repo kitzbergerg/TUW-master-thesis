@@ -19,8 +19,12 @@ class ModelWrapper(torch.nn.Module):
             use_cache=True,
             return_dict=True
         )
-        flattened = [kv for layer in outputs.past_key_values for kv in layer]
-        return (outputs.logits,) + tuple(flattened)
+
+        ordered_outputs = []
+        for layer_idx in range(len(outputs.past_key_values)):
+            ordered_outputs.append(outputs.past_key_values[layer_idx][0])
+            ordered_outputs.append(outputs.past_key_values[layer_idx][1])
+        return (outputs.logits,) + tuple(ordered_outputs)
 
 
 def create_inputs(model, tokenizer, text="Hello"):
@@ -40,8 +44,7 @@ def create_inputs(model, tokenizer, text="Hello"):
         'input_ids': input_ids,
         'attention_mask': attention_mask,
         'position_ids': position_ids,
-        **{f'past_key_values.{i}.key': past() for i in range(model.config.n_layer)},
-        **{f'past_key_values.{i}.value': past() for i in range(model.config.n_layer)}
+        **{f'past_key_values.{i}.{t}': past() for i in range(model.config.n_layer) for t in ['key', 'value']},
     }
 
 
@@ -52,10 +55,10 @@ def convert_to_onnx(model_name='gpt2', output_path='model/gpt2/model_torch.onnx'
     inputs = create_inputs(model, tokenizer)
 
     n_layer = model.config.n_layer
-    input_names = list(inputs.keys())
+    input_names = (['input_ids', 'attention_mask', 'position_ids'] +
+                   [f'past_key_values.{i}.{t}' for i in range(n_layer) for t in ['key', 'value']])
     output_names = (['logits'] +
-                    [f'present.{i}.key' for i in range(n_layer)] +
-                    [f'present.{i}.value' for i in range(n_layer)])
+                    [f'present.{i}.{t}' for i in range(n_layer) for t in ['key', 'value']])
 
     dynamic_axes = {
         'input_ids': {0: 'batch_size', 1: 'sequence_length'},

@@ -37,7 +37,7 @@ if __name__ == "__main__":
     split_model(
         ["input_ids", "attention_mask", "position_ids"],
         [
-            "/model/transformer/h.6/Add_output_0",
+            "/model/transformer/h.5/Add_output_0",
 
             "/model/transformer/Cast_4_output_0",
             "/model/transformer/Concat_3_output_0"
