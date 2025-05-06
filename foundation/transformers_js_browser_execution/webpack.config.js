@@ -5,6 +5,7 @@ module.exports = {
   entry: {
     main: './index.js',
     gpt2: './public/gpt2/index.js',
+    gemma3: './public/gemma3/index.js',
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -20,6 +21,7 @@ module.exports = {
       { from: 'node_modules/onnxruntime-web/dist/*.wasm', to: '[name][ext]' },
       { from: 'index.html', to: 'index.html' },
       { from: 'public/gpt2/index.html', to: 'gpt2/index.html' },
+      { from: 'public/gemma3/index.html', to: 'gemma3/index.html' },
     ]
   })],
   mode: 'development'

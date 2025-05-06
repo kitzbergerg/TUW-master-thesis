@@ -40,8 +40,7 @@ def convert_to_onnx(model_id='google/gemma-3-1b-it', output_path='model/gemma3/g
                     'input_ids': {0: 'batch_size', 1: 'sequence'},
                     'logits': {0: 'batch_size', 1: 'sequence'}
                 },
-                external_data=True,
-                all_tensors_to_one_file=True
+                external_data=True
             )
 
             onnx.save_model(onnx.load(temppath), output_path, save_as_external_data=True, all_tensors_to_one_file=True)

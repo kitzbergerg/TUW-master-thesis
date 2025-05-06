@@ -2,9 +2,8 @@
 
 -   WebLLM
     -   Compile and run non-standard model
-    -   Split model and run split model using webllm (if not possible use MLC directly)
+    -   Split model and run split model using webllm (if not possible use MLC/TVM directly)
 -   Transformers.js
-    -   Run basic model using transformers.js
     -   Compile and run non-standard model
     -   Run split model
     -   Explore how transformers uses ONNX runtime
