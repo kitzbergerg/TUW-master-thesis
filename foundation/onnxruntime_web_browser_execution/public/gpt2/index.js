@@ -14,7 +14,7 @@ function argMax(array) {
     return [].reduce.call(array, (m, c, i, arr) => c > arr[m] ? i : m, 0)
 }
 async function runModel(text) {
-    const session = await createSession('model/gpt2/model_no_kv.onnx');
+    const session = await createSession('http://localhost:3000/gpt2/model_no_kv.onnx');
     const tokenizer = await AutoTokenizer.from_pretrained('gpt2');
     const vocabSize = 50257;
 
@@ -52,17 +52,17 @@ async function testModel() {
     const feeds = { input_ids: encoded };
 
     // Test full model
-    const session = await createSession('model/gpt2/model_no_kv.onnx');
+    const session = await createSession('http://localhost:3000/gpt2/model_no_kv.onnx');
     const out = await session.run(feeds);
     console.log(out);
 
     // TODO: currently no models without kv exists
     // Test split model
-    const session_p1 = await createSession('model/gpt2/gpt2_p1.onnx');
+    const session_p1 = await createSession('http://localhost:3000/gpt2/gpt2_p1.onnx');
     const out_p1 = await session_p1.run(feeds);
     console.log(out_p1);
 
-    const session_p2 = await createSession('model/gpt2/gpt2_p2.onnx');
+    const session_p2 = await createSession('http://localhost:3000/gpt2/gpt2_p2.onnx');
     const out_p2 = await session_p2.run(out_p1);
     console.log(out_p2);
 

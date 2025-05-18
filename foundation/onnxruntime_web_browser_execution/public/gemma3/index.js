@@ -14,7 +14,7 @@ function argMax(array) {
     return [].reduce.call(array, (m, c, i, arr) => c > arr[m] ? i : m, 0)
 }
 async function runModel(prompt, maxTokens = 100) {
-    const session = await createSession('model/gemma3/model_q4.onnx');
+    const session = await createSession('http://localhost:3000/gemma3/model_q4.onnx');
     const tokenizer = await AutoTokenizer.from_pretrained('google/gemma-3-1b-it');
     const vocabSize = 262144
     const numHeads = 4;

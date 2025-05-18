@@ -19,7 +19,6 @@ module.exports = {
   plugins: [new CopyPlugin({
     // Use copy plugin to copy *.wasm to output folder.
     patterns: [
-      { from: 'model', to: 'model' },
       { from: 'node_modules/onnxruntime-web/dist/*.wasm', to: '[name][ext]' },
       { from: 'index.html', to: 'index.html' },
       { from: 'public/gemma3/index.html', to: 'gemma3/index.html' },

@@ -15,8 +15,8 @@ function argMax(array) {
 }
 
 async function runModelSplit(prompt, maxTokens = 100) {
-    const s1 = await createSession('model/gpt2/model_torch_p1.onnx');
-    const s2 = await createSession('model/gpt2/model_torch_p2.onnx');
+    const s1 = await createSession('http://localhost:3000/gpt2/model_torch_p1.onnx');
+    const s2 = await createSession('http://localhost:3000/gpt2/model_torch_p2.onnx');
     const tokenizer = await AutoTokenizer.from_pretrained('gpt2');
     const vocabSize = 50257;
     const hiddenSize = 768;
@@ -72,7 +72,7 @@ async function runModelSplit(prompt, maxTokens = 100) {
 }
 
 async function runModel(prompt, maxTokens = 100) {
-    const session = await createSession('model/gpt2/model_torch.onnx');
+    const session = await createSession('http://localhost:3000/gpt2/model_torch.onnx');
     const tokenizer = await AutoTokenizer.from_pretrained('gpt2');
     const vocabSize = 50257;
     const hiddenSize = 768;
