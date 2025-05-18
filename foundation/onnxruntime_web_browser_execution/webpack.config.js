@@ -7,6 +7,7 @@ module.exports = {
     gemma3: './public/gemma3/index.js',
     gpt2: './public/gpt2/index.js',
     gpt2_kv: './public/gpt2_kv/index.js',
+    phi: './public/phi/index.js',
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -24,6 +25,7 @@ module.exports = {
       { from: 'public/gemma3/index.html', to: 'gemma3/index.html' },
       { from: 'public/gpt2/index.html', to: 'gpt2/index.html' },
       { from: 'public/gpt2_kv/index.html', to: 'gpt2_kv/index.html' },
+      { from: 'public/phi/index.html', to: 'phi/index.html' },
     ]
   })],
   mode: 'development'
