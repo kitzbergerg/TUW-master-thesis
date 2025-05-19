@@ -9,6 +9,7 @@
         "dev": "nodemon server.js"
     },
     "dependencies": {
+        "@huggingface/transformers": "^3.5.1",
         "express": "^4.18.2",
         "uuid": "^11.1.0",
         "ws": "^8.13.0"

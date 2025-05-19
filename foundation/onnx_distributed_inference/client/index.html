@@ -25,11 +25,10 @@
                 const connectionStatus = document.getElementById('connection-status');
                 const connectedUsers = document.getElementById('connected-users');
 
-                // Determine WebSocket URL based on current location
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${protocol}//${window.location.host}`;
+                let session = undefined;
 
                 // Connect to WebSocket server
+                const wsUrl = `ws://localhost:3000`;
                 const socket = new WebSocket(wsUrl);
 
                 // Handle connection open
@@ -60,21 +59,34 @@
                 });
 
                 // Handle incoming messages
-                socket.addEventListener('message', (event) => {
+                socket.addEventListener('message', async (event) => {
                     try {
                         const data = JSON.parse(event.data);
                         console.log(data);
 
                         switch (data.type) {
+                            case 'initialize':
+                                console.log('Loading model...');
+                                console.log(data.message);
+                                createSession(data.message.modelURI, data.message.externalData).then((result) => {
+                                    session = result;
+                                    console.log('Finished loading model');
+                                });
+                                break;
                             case 'connectedUsers':
                                 connectedUsers.textContent = data.message;
                                 break;
                             case 'computation':
                                 console.log('Computing stuff...');
+                                console.log(data);
+                                const result = await runInference(session, data.message.requestId, data.message.data);
                                 const response = {
                                     type: 'computationResult',
-                                    message: data.message.map((x) => x + 1),
-                                    nodeId: data.nodeId,
+                                    message: {
+                                        nodeId: data.message.nodeId,
+                                        requestId: data.message.requestId,
+                                        data: result,
+                                    },
                                 };
                                 socket.send(JSON.stringify(response));
                                 break;
@@ -134,5 +146,6 @@
                 }
             });
         </script>
+        <script src="./bundle.js"></script>
     </body>
 </html>
