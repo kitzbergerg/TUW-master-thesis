@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, time::Duration};
 
 use axum::{
     Router,
@@ -13,7 +13,10 @@ use axum::{
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
 use tokenizers::tokenizer::Tokenizer;
-use tokio::sync::RwLock;
+use tokio::{
+    sync::{RwLock, mpsc::UnboundedSender},
+    time::sleep,
+};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use uuid::Uuid;
 
@@ -21,6 +24,7 @@ mod graph;
 
 use crate::graph::{Graph, Node};
 
+// Main application state
 struct AppState {
     worker_clients: RwLock<HashMap<Uuid, tokio::sync::mpsc::UnboundedSender<Message>>>,
     active_requests: RwLock<HashMap<Uuid, ActiveRequest>>,
@@ -29,31 +33,98 @@ struct AppState {
     vocab_size: usize,
 }
 
+// Tracking state for active inference requests
 struct ActiveRequest {
     user_id: Uuid,
     input_tokens: Vec<u32>,
     generated_tokens: Vec<u32>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct ComputationMessage {
-    node_id: Uuid,
-    request_id: Uuid,
-    data: serde_json::Value,
+// Model configuration for nodes
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ModelConfig {
+    model_uri: String,
+    external_data: serde_json::Value,
 }
 
-#[derive(Serialize, Deserialize)]
-struct WebsocketMessage {
-    #[serde(rename = "type")]
-    message_type: String,
-    message: serde_json::Value,
+// Input tensors for model inference
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(untagged)]
+enum ModelInput {
+    First(FirstInput),
+    Intermediate(HashMap<String, IntermediateResult>),
+}
+// Input tensors for model inference
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct FirstInput {
+    input_ids: Vec<String>,
+    attention_mask: Vec<String>,
+    position_ids: Vec<String>,
+}
+
+// Output tensors from model inference
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(untagged)]
+enum ModelOutput {
+    Final { logits: FinalOutput },
+    Intermediate(HashMap<String, IntermediateResult>),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct FinalOutput {
+    data: Vec<f64>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct IntermediateResult {
+    data: Vec<f64>,
+    dims: Vec<u32>,
+}
+
+// Enum for different WebSocket message types
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
+enum WebSocketMessage {
+    #[serde(rename = "initialize")]
+    Initialize { message: ModelConfig },
+    #[serde(rename = "initializeDone")]
+    InitializeDone,
+    #[serde(rename = "inferenceRequest")]
+    InferenceRequest { message: String },
+    #[serde(rename = "inferenceResult")]
+    InferenceResult { message: String },
+    #[serde(rename = "computation")]
+    Computation { message: ComputationMessage },
+    #[serde(rename = "computationResult")]
+    ComputationResult { message: ComputationResultMessage },
+    #[serde(rename = "connectedUsers")]
+    ConnectedUsers { message: usize },
+}
+
+// Computation message structure
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct ComputationMessage {
+    #[serde(rename = "nodeId")]
+    node_id: Uuid,
+    #[serde(rename = "requestId")]
+    request_id: Uuid,
+    data: ModelInput,
+}
+
+// Computation result message structure
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct ComputationResultMessage {
+    #[serde(rename = "nodeId")]
+    node_id: Uuid,
+    #[serde(rename = "requestId")]
+    request_id: Uuid,
+    data: ModelOutput,
 }
 
 #[tokio::main]
 async fn main() {
     // Initialize the tokenizer
-    let tokenizer =
-        Tokenizer::from_pretrained("microsoft/phi-2", None).expect("Failed to load tokenizer");
+    let tokenizer = Tokenizer::from_pretrained("microsoft/phi-2", None).unwrap();
     let vocab_size = 51200;
 
     // Load external data
@@ -63,22 +134,18 @@ async fn main() {
         .expect("Failed to parse data_p2.json");
 
     // Create graph
-    let end = Node::new(
-        vec![],
-        serde_json::json!({
-            "modelURI": "http://localhost:3000/model/phi/split/p2/model.onnx",
-            "externalData": external_data_p2
-        }),
-    );
+    let end_config = ModelConfig {
+        model_uri: "http://localhost:3000/model/phi/split/p2/model.onnx".to_string(),
+        external_data: external_data_p2,
+    };
 
-    let start = Node::new(
-        vec![end.id],
-        serde_json::json!({
-            "modelURI": "http://localhost:3000/model/phi/split/p1/model.onnx",
-            "externalData": external_data_p1
-        }),
-    );
+    let start_config = ModelConfig {
+        model_uri: "http://localhost:3000/model/phi/split/p1/model.onnx".to_string(),
+        external_data: external_data_p1,
+    };
 
+    let end = Node::new(vec![], end_config);
+    let start = Node::new(vec![end.id], start_config);
     let graph = Graph::new(vec![start, end]);
 
     // Create shared state
@@ -101,6 +168,7 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
+    println!("Server listening on http://127.0.0.1:3000");
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -126,37 +194,31 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     });
 
     // Generate a unique user ID
-    let user_uuid = Uuid::new_v4();
-    println!("Client connected: {}", user_uuid);
+    let user_id = Uuid::new_v4();
+    println!("Client connected: {user_id}");
 
     // Store the client
     {
         let mut clients = state.worker_clients.write().await;
-        clients.insert(user_uuid.clone(), tx.clone());
+        clients.insert(user_id, tx.clone());
 
         // Broadcast the number of connected users
         broadcast_connected_users(&clients).await;
     }
 
-    // Initialize the user in the graph
-    let node_id = {
-        let mut graph = state.graph.write().await;
-        graph.add_user(user_uuid)
-    };
-
-    // Send initialization message if a node is assigned
+    // Initialize the user in the graph and send initialization message if a node is assigned
+    let node_id = state.graph.write().await.add_worker(user_id);
     if let Some(node_id) = node_id {
-        let graph_data = {
-            let graph = state.graph.read().await;
-            graph.get_node(&node_id).map(|node| node.data.clone())
-        };
+        println!("Assigning worker {user_id} to node {node_id}");
+        let graph_data = state
+            .graph
+            .read()
+            .await
+            .get_node(&node_id)
+            .map(|node| node.data.clone());
 
         if let Some(data) = graph_data {
-            let init_message = WebsocketMessage {
-                message_type: "initialize".to_string(),
-                message: data,
-            };
-
+            let init_message = WebSocketMessage::Initialize { message: data };
             let json = serde_json::to_string(&init_message).unwrap();
             let _ = tx.send(Message::Text(json.into()));
         }
@@ -166,30 +228,25 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     while let Some(result) = receiver.next().await {
         match result {
             Ok(Message::Text(text)) => {
-                handle_message(text.to_string(), &user_uuid, &state).await;
+                let state = state.clone();
+                tokio::spawn(async move {
+                    handle_message(text.to_string(), &user_id, &node_id, &state).await
+                });
             }
-            Ok(Message::Binary(_)) => {
-                println!("Binary message received");
-            }
-            Ok(Message::Close(_)) => {
-                break;
-            }
-            _ => {
-                println!("Unexpected message")
-            }
+            Ok(Message::Binary(_)) => println!("Binary message received"),
+            Ok(Message::Close(_)) => break,
+            _ => println!("Unexpected message"),
         }
     }
 
     // Client disconnected
-    println!("Client disconnected: {}", user_uuid);
+    println!("Client disconnected: {user_id}");
 
     // Remove the client
+    state.graph.write().await.remove_worker(&user_id);
     {
         let mut clients = state.worker_clients.write().await;
-        clients.remove(&user_uuid);
-
-        let mut graph = state.graph.write().await;
-        graph.remove_user(&user_uuid);
+        clients.remove(&user_id);
 
         broadcast_connected_users(&clients).await;
     }
@@ -198,191 +255,183 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     send_task.abort();
 }
 
-async fn handle_message(text: String, user_uuid: &Uuid, state: &Arc<AppState>) {
-    let message: WebsocketMessage = match serde_json::from_str(&text) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("Failed to parse message: {}", e);
-            return;
-        }
-    };
+async fn handle_message(
+    text: String,
+    user_id: &Uuid,
+    node_id: &Option<Uuid>,
+    state: &Arc<AppState>,
+) {
+    let message: WebSocketMessage = serde_json::from_str(&text).unwrap();
 
-    match message.message_type.as_str() {
-        "inferenceRequest" => {
-            handle_inference_request(message.message, user_uuid, state).await;
+    match message {
+        WebSocketMessage::InitializeDone => state
+            .graph
+            .write()
+            .await
+            .enable_worker(user_id, &node_id.unwrap()),
+        WebSocketMessage::InferenceRequest { message } => {
+            handle_inference_request(message, user_id, state).await;
         }
-        "computationResult" => {
-            handle_computation_result(message.message, state).await;
+        WebSocketMessage::ComputationResult { message } => {
+            handle_computation_result(message, state).await;
         }
         _ => {
-            eprintln!("Unknown message type: {}", message.message_type);
+            eprintln!("Received unexpected message type from client");
         }
     }
 }
 
-async fn handle_inference_request(
-    message: serde_json::Value,
-    user_uuid: &Uuid,
-    state: &Arc<AppState>,
-) {
-    let text = message.as_str().unwrap_or_default();
-
+async fn handle_inference_request(text: String, user_uuid: &Uuid, state: &Arc<AppState>) {
     // Tokenize input text
     let encoding = state.tokenizer.encode(text, false).unwrap();
     let input_ids = encoding.get_ids().to_vec();
     let attention_mask = encoding.get_attention_mask().to_vec();
-    let position_ids: Vec<u64> = (0..input_ids.len()).map(|x| x as u64).collect();
+    let position_ids = (0..input_ids.len()).collect::<Vec<_>>();
 
-    let input = serde_json::json!({
-        "input_ids": input_ids.iter().map(|x| x.to_string()).collect::<Vec<_>>(),
-        "attention_mask": attention_mask.iter().map(|x| x.to_string()).collect::<Vec<_>>(),
-        "position_ids": position_ids.iter().map(|x| x.to_string()).collect::<Vec<_>>(),
-    });
+    // Create model input
+    let input = FirstInput {
+        input_ids: input_ids.iter().map(|x| x.to_string()).collect(),
+        attention_mask: attention_mask.iter().map(|x| x.to_string()).collect(),
+        position_ids: position_ids.iter().map(|x| x.to_string()).collect(),
+    };
 
-    println!("Input: {:?}", input);
+    println!(
+        "Processing inference request with {} tokens",
+        input_ids.len()
+    );
 
     // Get worker for start node
-    let (worker_id, start_node_id) = {
-        let graph = state.graph.read().await;
-        (
-            graph.get_worker(&graph.start_node_id),
-            graph.start_node_id.clone(),
-        )
+    let start_node_id = state.graph.read().await.start_node_id;
+    let worker_id = match get_worker(state, start_node_id).await {
+        Some(id) => id,
+        None => return,
     };
 
     // Create request
     let request_id = Uuid::new_v4();
 
     // Store active request
-    {
-        let mut active_requests = state.active_requests.write().await;
-        active_requests.insert(
-            request_id.clone(),
-            ActiveRequest {
-                user_id: *user_uuid,
-                input_tokens: input_ids.clone(),
-                generated_tokens: Vec::new(),
-            },
-        );
-    }
+    state.active_requests.write().await.insert(
+        request_id,
+        ActiveRequest {
+            user_id: *user_uuid,
+            input_tokens: input_ids,
+            generated_tokens: Vec::new(),
+        },
+    );
 
     // Send computation message to worker
-    if let Some(worker_id) = worker_id {
-        let clients = state.worker_clients.read().await;
-        if let Some(tx) = clients.get(&worker_id) {
-            let comp_message = WebsocketMessage {
-                message_type: "computation".to_string(),
-                message: serde_json::json!({
-                    "nodeId": start_node_id,
-                    "requestId": request_id,
-                    "data": input
-                }),
-            };
+    if let Some(tx) = state.worker_clients.read().await.get(&worker_id) {
+        let comp_message = WebSocketMessage::Computation {
+            message: ComputationMessage {
+                node_id: start_node_id,
+                request_id,
+                data: ModelInput::First(input),
+            },
+        };
 
-            let json = serde_json::to_string(&comp_message).unwrap();
-            let _ = tx.send(Message::Text(json.into()));
-        }
+        let json = serde_json::to_string(&comp_message).unwrap();
+        let _ = tx.send(Message::Text(json.into()));
     }
 }
 
-async fn handle_computation_result(message: serde_json::Value, state: &Arc<AppState>) {
-    let result = message.as_object().unwrap();
-    let node_id = Uuid::from_str(result["nodeId"].as_str().unwrap_or_default()).unwrap();
-    let request_id = Uuid::from_str(result["requestId"].as_str().unwrap_or_default()).unwrap();
-    let data = &result["data"];
-
-    println!("Got message: {node_id}");
-    println!("Got message: {request_id}");
+async fn handle_computation_result(result: ComputationResultMessage, state: &Arc<AppState>) {
+    println!(
+        "Processing computation result for node: {}, request: {}",
+        result.node_id, result.request_id
+    );
 
     // Get next nodes
-    {
-        let graph = state.graph.read().await;
-        let next_nodes = graph.get_next_nodes(&node_id);
+    let next_nodes = state
+        .graph
+        .read()
+        .await
+        .get_next_nodes(&result.node_id)
+        .clone();
 
-        if !next_nodes.is_empty() {
-            // Forward computation to next nodes
-            let clients = state.worker_clients.read().await;
+    if !next_nodes.is_empty() {
+        for node_id in next_nodes {
+            println!("Forwarding to next node: {}", node_id);
+            let worker_id = match get_worker(state, node_id).await {
+                Some(id) => id,
+                None => return,
+            };
+            let intermediate = match result.data.clone() {
+                ModelOutput::Intermediate(hash_map) => hash_map,
+                _ => unreachable!(),
+            };
 
-            for node in next_nodes {
-                println!("Sending to node: {}", node.id);
-                if let Some(worker_id) = {
-                    let graph = state.graph.read().await;
-                    graph.get_worker(&node.id)
-                } {
-                    println!("Worker: {}", worker_id);
-                    if let Some(tx) = clients.get(&worker_id) {
-                        let comp_message = WebsocketMessage {
-                            message_type: "computation".to_string(),
-                            message: serde_json::json!({
-                                "nodeId": node.id,
-                                "requestId": request_id,
-                                "data": data
-                            }),
-                        };
-                        println!("Message to long");
+            if let Some(tx) = state.worker_clients.read().await.get(&worker_id) {
+                let comp_message = WebSocketMessage::Computation {
+                    message: ComputationMessage {
+                        node_id: node_id,
+                        request_id: result.request_id,
+                        data: ModelInput::Intermediate(intermediate),
+                    },
+                };
 
-                        let json = serde_json::to_string(&comp_message).unwrap();
-                        let _ = tx.send(Message::Text(json.into()));
-                    }
-                }
+                let json = serde_json::to_string(&comp_message).unwrap();
+                let _ = tx.send(Message::Text(json.into()));
             }
-            return;
         }
-    };
+        return;
+    }
 
     // Reached end node, process the logits
-    let logits = data["logits"]["data"].as_array().unwrap();
+    let logits = match result.data {
+        ModelOutput::Final { logits } => logits.data,
+        ModelOutput::Intermediate(_) => unreachable!(),
+    };
     let start_idx = logits.len() - state.vocab_size;
     let logits_slice = &logits[start_idx..];
-
-    // Find max logit (argmax)
     let next_token = arg_max(logits_slice);
 
-    let token_str = {
-        let token_ids = vec![next_token];
-        state
-            .tokenizer
-            .decode(&token_ids, false)
-            .unwrap_or_default()
-    };
-
-    println!("Generated token: {}, Decoded: {}", next_token, token_str);
+    println!(
+        "Generated token: {}, Decoded: {}",
+        next_token,
+        state.tokenizer.decode(&[next_token], false).unwrap()
+    );
 
     // Update active request
     let (user_id, should_finalize) = {
         let mut active_requests = state.active_requests.write().await;
-        let active_request = active_requests.get_mut(&request_id).unwrap();
+        let active_request = active_requests.get_mut(&result.request_id).unwrap();
         active_request.generated_tokens.push(next_token);
 
-        let user_id = active_request.user_id.clone();
-        let should_finalize = active_request.generated_tokens.len() > 20;
-
-        (user_id, should_finalize)
+        (
+            active_request.user_id,
+            active_request.generated_tokens.len() > 20,
+        )
     };
 
     if should_finalize {
         // Generate final output and send to client
         let output_text = {
             let active_requests = state.active_requests.read().await;
-            let active_request = active_requests.get(&request_id).unwrap();
+            let active_request = active_requests.get(&result.request_id).unwrap();
             state
                 .tokenizer
                 .decode(&active_request.generated_tokens, false)
                 .unwrap_or_default()
         };
 
-        println!("Final result: {}", output_text);
+        println!("Final result: {output_text}");
 
-        let clients = state.worker_clients.read().await;
-        if let Some(tx) = clients.get(&user_id) {
-            let result_message = WebsocketMessage {
-                message_type: "inferenceResult".to_string(),
-                message: serde_json::json!(output_text),
+        if let Some(tx) = state.worker_clients.read().await.get(&user_id) {
+            let result_message = WebSocketMessage::InferenceResult {
+                message: output_text,
             };
 
             let json = serde_json::to_string(&result_message).unwrap();
             let _ = tx.send(Message::Text(json.into()));
         }
+
+        // Clean up active request
+        state
+            .active_requests
+            .write()
+            .await
+            .remove(&result.request_id);
 
         return;
     }
@@ -390,68 +439,62 @@ async fn handle_computation_result(message: serde_json::Value, state: &Arc<AppSt
     // Generate next token
     let position = {
         let active_requests = state.active_requests.read().await;
-        let active_request = active_requests.get(&request_id).unwrap();
+        let active_request = active_requests.get(&result.request_id).unwrap();
         active_request.input_tokens.len() + active_request.generated_tokens.len() - 1
     };
 
-    let input = serde_json::json!({
-        "input_ids": [next_token.to_string()],
-        "attention_mask": [1.to_string()],
-        "position_ids": [position.to_string()],
-    });
-
-    println!("Input: {:?}", input);
-
-    // Get worker for start node and send next computation
-    let (worker_id, start_node_id) = {
-        let graph = state.graph.read().await;
-        (
-            graph.get_worker(&graph.start_node_id),
-            graph.start_node_id.clone(),
-        )
+    let input = FirstInput {
+        input_ids: vec![next_token.to_string()],
+        attention_mask: vec!["1".to_string()],
+        position_ids: vec![position.to_string()],
     };
 
-    if let Some(worker_id) = worker_id {
-        let clients = state.worker_clients.read().await;
-        if let Some(tx) = clients.get(&worker_id) {
-            let comp_message = WebsocketMessage {
-                message_type: "computation".to_string(),
-                message: serde_json::json!({
-                    "nodeId": start_node_id,
-                    "requestId": request_id,
-                    "data": input
-                }),
-            };
+    // Get worker for start node and send next computation
+    let start_node_id = state.graph.read().await.start_node_id;
+    let worker_id = match get_worker(state, start_node_id).await {
+        Some(id) => id,
+        None => return,
+    };
 
-            let json = serde_json::to_string(&comp_message).unwrap();
-            let _ = tx.send(Message::Text(json.into()));
-        }
+    if let Some(tx) = state.worker_clients.read().await.get(&worker_id) {
+        let comp_message = WebSocketMessage::Computation {
+            message: ComputationMessage {
+                node_id: start_node_id,
+                request_id: result.request_id,
+                data: ModelInput::First(input),
+            },
+        };
+
+        let json = serde_json::to_string(&comp_message).unwrap();
+        let _ = tx.send(Message::Text(json.into()));
     }
 }
 
-fn arg_max(array: &[serde_json::Value]) -> u32 {
-    let mut max_idx = 0u32;
-    let mut max_val = f64::NEG_INFINITY;
-
-    for (i, val) in array.iter().enumerate() {
-        if let Some(num) = val.as_f64() {
-            if num > max_val {
-                max_val = num;
-                max_idx = i as u32;
-            }
+async fn get_worker(state: &Arc<AppState>, node_id: Uuid) -> Option<Uuid> {
+    for i in 1..10 {
+        match state.graph.read().await.get_worker(&node_id) {
+            Some(worker_id) => return Some(worker_id),
+            None => {}
         }
+        let retry_in = 10 * i;
+        println!("No worker found for node {node_id}. Retrying in {retry_in}s...");
+        sleep(Duration::from_secs(retry_in)).await;
     }
-
-    max_idx
+    println!("No worker found for node {node_id} after retrying. Giving up...");
+    None
+}
+fn arg_max(values: &[f64]) -> u32 {
+    values
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(i, _)| i as u32)
+        .unwrap_or(0)
 }
 
-async fn broadcast_connected_users(
-    clients: &HashMap<Uuid, tokio::sync::mpsc::UnboundedSender<Message>>,
-) {
-    let count = clients.len();
-    let message = WebsocketMessage {
-        message_type: "connectedUsers".to_string(),
-        message: serde_json::json!(count),
+async fn broadcast_connected_users(clients: &HashMap<Uuid, UnboundedSender<Message>>) {
+    let message = WebSocketMessage::ConnectedUsers {
+        message: clients.len(),
     };
 
     let json = serde_json::to_string(&message).unwrap();

@@ -73,8 +73,10 @@
                         switch (data.type) {
                             case 'initialize':
                                 console.log('Loading model: ', data.message);
-                                createSession(data.message.modelURI, data.message.externalData).then((result) => {
+                                createSession(data.message.model_uri, data.message.external_data).then((result) => {
                                     session = result;
+                                    const response = { type: 'initializeDone' };
+                                    socket.send(JSON.stringify(response));
                                     console.log('Finished loading model');
                                 });
                                 break;
