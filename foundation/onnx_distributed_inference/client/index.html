@@ -13,7 +13,13 @@
         <div id="chat-container"></div>
 
         <form id="message-form">
-            <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off" />
+            <input
+                type="text"
+                id="message-input"
+                placeholder="Type your message..."
+                autocomplete="off"
+                value="Why is the sky blue?"
+            />
             <button type="submit">Send</button>
         </form>
 
@@ -66,8 +72,7 @@
 
                         switch (data.type) {
                             case 'initialize':
-                                console.log('Loading model...');
-                                console.log(data.message);
+                                console.log('Loading model: ', data.message);
                                 createSession(data.message.modelURI, data.message.externalData).then((result) => {
                                     session = result;
                                     console.log('Finished loading model');
@@ -77,8 +82,7 @@
                                 connectedUsers.textContent = data.message;
                                 break;
                             case 'computation':
-                                console.log('Computing stuff...');
-                                console.log(data);
+                                console.log('Running computation: ', data);
                                 const result = await runInference(session, data.message.requestId, data.message.data);
                                 const response = {
                                     type: 'computationResult',
@@ -91,7 +95,7 @@
                                 socket.send(JSON.stringify(response));
                                 break;
                             case 'inferenceResult':
-                                displayMessage(data);
+                                displayMessage(data.message);
                                 break;
                             default:
                                 console.error('Unknown type');
@@ -108,10 +112,7 @@
                     const message = messageInput.value.trim();
                     if (!message) return;
 
-                    const messageObj = {
-                        type: 'inferenceRequest',
-                        message,
-                    };
+                    const messageObj = { type: 'inferenceRequest', message };
                     socket.send(JSON.stringify(messageObj));
 
                     // Clear input field
@@ -119,24 +120,10 @@
                 });
 
                 // Display message in chat container
-                function displayMessage(data) {
+                function displayMessage(message) {
                     const messageDiv = document.createElement('div');
                     messageDiv.className = 'message';
-
-                    if (data.type === 'system') {
-                        // System message
-                        messageDiv.className += ' system-message';
-                        messageDiv.textContent = data.message;
-                    } else if (data.type === 'chat') {
-                        // Format timestamp
-                        const timestamp = new Date(data.timestamp);
-                        const timeString = `${timestamp.getHours().toString().padStart(2, '0')}:${timestamp
-                            .getMinutes()
-                            .toString()
-                            .padStart(2, '0')}`;
-
-                        messageDiv.innerHTML = `<small>[${timeString}]</small>:<div>${data.message}</div>`;
-                    }
+                    messageDiv.textContent = message;
 
                     // Add message to chat container
                     chatContainer.appendChild(messageDiv);

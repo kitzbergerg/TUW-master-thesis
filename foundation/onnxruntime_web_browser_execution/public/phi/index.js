@@ -43,6 +43,7 @@ async function runModelSplit(prompt, maxTokens = 100) {
         const positionIds = new ort.Tensor('int64', BigInt64Array.from(isFirst ? [...Array(seqLen).keys()].map(x => BigInt(x)) : [BigInt(inputSequence.length - 1)]), [1, seqLen]);
 
         const input = { input_ids: currentInput, attention_mask: attentionMask, position_ids: positionIds };
+        console.log('Input: ', input);
         for (let layer = 0; layer < numLayers / 2; layer++) {
             const keyName = `past_key_values.${layer}.key`;
             const valueName = `past_key_values.${layer}.value`;
@@ -50,6 +51,7 @@ async function runModelSplit(prompt, maxTokens = 100) {
             input[valueName] = isFirst ? new ort.Tensor('float32', new Float32Array(0), [1, numHeads, 0, headDim]) : pastKeyValues[`present.${layer}.value`];
         }
         const intermediate = await s1.run(input);
+        console.log('Intermediate: ', intermediate);
 
         const passOn = {}
         for (const name in intermediate) {
@@ -63,6 +65,7 @@ async function runModelSplit(prompt, maxTokens = 100) {
             passOn[valueName] = isFirst ? new ort.Tensor('float32', new Float32Array(0), [1, numHeads, 0, headDim]) : pastKeyValues[`present.${layer}.value`];
         }
         const output = await s2.run(passOn);
+        console.log('Output: ', output);
         for (const name in output) {
             if (name.startsWith('present.')) pastKeyValues[name] = output[name];
         }
@@ -70,7 +73,7 @@ async function runModelSplit(prompt, maxTokens = 100) {
         const logits = await output.logits.getData();
         const lastLogits = isFirst ? logits.slice(-vocabSize) : logits;
         const nextToken = argMax(lastLogits);
-        console.log(`Generated token: ${tokenizer.decode([nextToken])}`);
+        console.log(`Generated token: ${nextToken}, Decoded: ${tokenizer.decode([nextToken])}`);
         inputSequence.push(nextToken);
     }
 

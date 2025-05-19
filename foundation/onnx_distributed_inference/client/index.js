@@ -16,8 +16,7 @@ async function createSession(modelPath, externalData) {
 const pastKeyValues = new Map()
 
 async function runInference(session, requestId, input) {
-    console.log("Computing for user: ", requestId)
-    console.log("Input: ", input)
+    console.log("Inference request: ", requestId, input)
 
     const isFirstBlock = 'input_ids' in input;
     const isFirstRequest = !pastKeyValues.has(requestId)
@@ -33,14 +32,13 @@ async function runInference(session, requestId, input) {
     } else {
         feeds = {};
         for (const [key, value] of Object.entries(input)) {
-            console.log(`${key}: ${value}`);
             feeds[key] = new ort.Tensor('float32', Float32Array.from(value.data), value.dims)
         }
     }
 
     // TODO: figure out how to get num of layers
-    const layerStart = isFirstBlock ? 0 : 16;
-    const layerEnd = isFirstBlock ? 16 : 32;
+    const layerStart = isFirstBlock ? 0 : numLayers / 2;
+    const layerEnd = isFirstBlock ? numLayers / 2 : numLayers;
     if (isFirstRequest) {
         for (let layer = layerStart; layer < layerEnd; layer++) {
             feeds[`past_key_values.${layer}.key`] = new ort.Tensor('float32', new Float32Array(0), [1, numHeads, 0, headDim]);
@@ -53,15 +51,16 @@ async function runInference(session, requestId, input) {
             feeds[`past_key_values.${layer}.value`] = cache[`present.${layer}.value`];
         }
     }
+    console.log("Model input: ", feeds)
     const inferenceResults = await session.run(feeds);
-    console.log("Got inference result: ", inferenceResults)
+    console.log("Model output: ", inferenceResults)
 
     const result = {}
     if (isFirstRequest) pastKeyValues.set(requestId, {})
     const cache = pastKeyValues.get(requestId);
     for (const name in inferenceResults) {
         if (name.startsWith('present.')) {
-            cache[name.replace("present.", "past_key_values.")] = inferenceResults[name];
+            cache[name] = inferenceResults[name];
         } else {
             result[name] = {
                 data: Array.from(await inferenceResults[name].getData()),
@@ -70,7 +69,7 @@ async function runInference(session, requestId, input) {
         }
     }
 
-    console.log("Parsed inference to: ", result)
+    console.log("Inference response: ", result)
     return result
 
 }
