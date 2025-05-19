@@ -1,8 +1,10 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, Gemma3ForCausalLM
 import onnx
 import onnxruntime
 from transformers.cache_utils import HybridCache
+
+cache_size = 10
 
 
 class ModelWrapper(torch.nn.Module):
@@ -10,19 +12,19 @@ class ModelWrapper(torch.nn.Module):
         super().__init__()
         self.model = model
 
-    def forward(self, input_ids, attention_mask, position_ids, *past_key_values):
-        max_generated_length = input_ids.shape[1] + 3
+    def forward(self, input_ids, attention_mask, position_ids, legacy_cache):
+        assert len(legacy_cache) == self.model.config.num_hidden_layers
+        assert len(legacy_cache[0]) == 2
+
         past = HybridCache(
             config=self.model.config,
             max_batch_size=1,
-            max_cache_len=max_generated_length,
+            max_cache_len=cache_size,
             device=self.model.device,
             dtype=self.model.dtype
         )
-        for i in range(len(past.key_cache)):
-            keys = past_key_values[2 * i]
-            values = past_key_values[2 * i + 1]
-            past.update(keys, values, i)
+        for i in range(self.model.config.num_hidden_layers):
+            past.update(legacy_cache[i][0], legacy_cache[i][1], i)
 
         outputs = self.model(
             input_ids=input_ids,
@@ -33,63 +35,77 @@ class ModelWrapper(torch.nn.Module):
             return_dict=True
         )
 
-        hybrid_outputs: HybridCache = outputs.past_key_values
-        keys = hybrid_outputs.key_cache
-        values = hybrid_outputs.value_cache
-        ordered_outputs = []
-        for layer_idx in range(len(keys)):
-            ordered_outputs.append(keys[layer_idx])
-            ordered_outputs.append(values[layer_idx])
-        return (outputs.logits,) + tuple(ordered_outputs)
+        cache: HybridCache = outputs.past_key_values
+        legacy_cache = ()
+        for i in range(self.model.config.num_hidden_layers):
+            legacy_cache += (cache.key_cache[i], cache.value_cache[i],)
+        return (outputs.logits,) + legacy_cache
 
 
-def create_inputs(model, tokenizer, text="Hello"):
-    inputs = tokenizer(text, return_tensors="pt")
+def create_legacy_cache(model, batch_size=1, device="cpu"):
+    head_dim = model.config.head_dim
+
+    def custom_kv():
+        random_part = torch.randint(0, 4, (batch_size, 1, 1, 3, head_dim), device=device)
+        zero_part = torch.zeros(batch_size, 1, 1, cache_size - 3, head_dim, device=device)
+        return torch.cat((random_part, zero_part), dim=3)
+
+    num_layers = model.config.num_hidden_layers
+    legacy_cache = []
+    for _ in range(num_layers):
+        legacy_cache.append((custom_kv(), custom_kv()))
+    return tuple(legacy_cache)
+
+
+def prepare_inputs(model, tokenizer, text="Hello"):
+    inputs = tokenizer(text, return_tensors="pt", add_special_tokens=False)
     input_ids = inputs["input_ids"]
     attention_mask = inputs["attention_mask"]
     batch_size, seq_len = input_ids.shape
     device = input_ids.device
 
-    past_key_values_length = 5
     position_ids = torch.arange(seq_len, dtype=torch.long, device=device).unsqueeze(0)
-
-    head_dim = 256
-    past = lambda: torch.zeros(batch_size, 1, past_key_values_length, head_dim, device=device)
+    legacy_cache = create_legacy_cache(model, batch_size=batch_size, device=device)
 
     return {
         'input_ids': input_ids,
         'attention_mask': attention_mask,
         'position_ids': position_ids,
-        **{f'past_key_values.{i}.{t}': past() for i in range(model.config.num_hidden_layers) for t in ['key', 'value']},
+        'legacy_cache': legacy_cache
     }
 
 
-def convert_to_onnx(model_name='google/gemma-3-1b-it', output_path='model/gemma/torch/model_torch.onnx'):
-    model = AutoModelForCausalLM.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    wrapped_model = ModelWrapper(model)
-    inputs = create_inputs(model, tokenizer)
+def convert_to_onnx(output_path, wrapped_model, inputs):
+    model = wrapped_model.model
+    num_layers = model.config.num_hidden_layers
+    input_names = ['input_ids', 'attention_mask', 'position_ids'] + [
+        f'past_key_values.{i}.{t}' for i in range(num_layers) for t in ['key', 'value']
+    ]
+    output_names = ['logits'] + [
+        f'present.{i}.{t}' for i in range(num_layers) for t in ['key', 'value']
+    ]
+    input_tuple = (
+        inputs['input_ids'],
+        inputs['attention_mask'],
+        inputs['position_ids'],
+        inputs['legacy_cache']
+    )
 
-    n_layer = 26
-    input_names = (['input_ids', 'attention_mask', 'position_ids'] +
-                   [f'past_key_values.{i}.{t}' for i in range(n_layer) for t in ['key', 'value']])
-    output_names = (['logits'] +
-                    [f'present.{i}.{t}' for i in range(n_layer) for t in ['key', 'value']])
-
+    num_heads = model.config.num_attention_heads
+    head_dim = model.config.head_dim
     dynamic_axes = {
         'input_ids': {0: 'batch_size', 1: 'sequence_length'},
         'attention_mask': {0: 'batch_size', 1: 'past_sequence_length + 1'},
         'position_ids': {0: 'batch_size', 1: 'sequence_length'},
-        'logits': {0: 'batch_size', 1: 'sequence_length', 2: 'vocab_size'},
+        'logits': {0: 'batch_size', 1: 'sequence_length'},
 
-        **{name: {0: 'batch_size', 1: '1', 2: 'past_sequence_length', 3: '256'} for name in input_names if
-           'past_key_values.' in name},
-        **{name: {0: 'batch_size', 1: '1', 2: 'past_sequence_length + 512', 3: '256'} for name in output_names if
-           'present.' in name}
+        **{name: {0: 'batch_size', 1: f'{num_heads}', 2: 'past_sequence_length', 3: f'{head_dim}'}
+           for name in input_names if 'past_key_values' in name},
+        **{name: {0: 'batch_size', 1: f'{num_heads}', 2: 'past_sequence_length + 1', 3: f'{head_dim}'}
+           for name in output_names if 'present' in name}
     }
 
     try:
-        input_tuple = tuple(inputs[name] for name in input_names)
         torch.onnx.export(
             wrapped_model,
             input_tuple,
@@ -103,7 +119,6 @@ def convert_to_onnx(model_name='google/gemma-3-1b-it', output_path='model/gemma/
         )
         onnx.checker.check_model(output_path)
         print(f"Model successfully converted and saved to {output_path}")
-        verify_onnx_model(output_path, wrapped_model, inputs)
 
     except Exception as e:
         print(f"Error converting model to ONNX: {e}")
@@ -113,12 +128,24 @@ def convert_to_onnx(model_name='google/gemma-3-1b-it', output_path='model/gemma/
 
 def verify_onnx_model(onnx_path, pytorch_model, inputs):
     session = onnxruntime.InferenceSession(onnx_path)
-    ort_inputs = {i.name: inputs[i.name].numpy() for i in session.get_inputs()}
+    num_layers = pytorch_model.model.config.num_hidden_layers
+    ort_inputs = {
+        'input_ids': inputs['input_ids'].numpy(),
+        'attention_mask': inputs['attention_mask'].numpy(),
+        'position_ids': inputs['position_ids'].numpy(),
+        **{f'past_key_values.{i}.key': inputs['legacy_cache'][i][0].numpy() for i in range(num_layers)},
+        **{f'past_key_values.{i}.value': inputs['legacy_cache'][i][1].numpy() for i in range(num_layers)},
+    }
+
     ort_outputs = session.run(None, ort_inputs)
 
     with torch.no_grad():
-        pt_input = tuple(inputs[i.name] for i in session.get_inputs())
-        pt_outputs = pytorch_model(*pt_input)
+        pt_outputs = pytorch_model(
+            inputs['input_ids'],
+            inputs['attention_mask'],
+            inputs['position_ids'],
+            inputs['legacy_cache']
+        )
 
     def compare(a, b, name):
         if torch.allclose(a, b, atol=1e-4):
@@ -128,10 +155,18 @@ def verify_onnx_model(onnx_path, pytorch_model, inputs):
 
     compare(torch.tensor(ort_outputs[0]), pt_outputs[0], "Logits")
 
-    for i in range(pytorch_model.model.config.n_layer):
-        compare(torch.tensor(ort_outputs[2 * i + 1]), pt_outputs[2 * i + 1], f"Layer {i} key")
-        compare(torch.tensor(ort_outputs[2 * i + 2]), pt_outputs[2 * i + 2], f"Layer {i} value")
+    for i in range(1, len(pt_outputs)):
+        compare(torch.tensor(ort_outputs[2 * i]), pt_outputs[i][0], f"Layer {i} key")
+        compare(torch.tensor(ort_outputs[2 * i + 1]), pt_outputs[i][1], f"Layer {i} value")
 
+
+model_name = 'google/gemma-3-1b-it'
+output_path = 'model/gemma/torch/model.onnx'
 
 if __name__ == "__main__":
-    convert_to_onnx()
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+    wrapped_model = ModelWrapper(model)
+    inputs = prepare_inputs(model, AutoTokenizer.from_pretrained(model_name))
+
+    convert_to_onnx(output_path, wrapped_model, inputs)
+    verify_onnx_model(output_path, wrapped_model, inputs)
