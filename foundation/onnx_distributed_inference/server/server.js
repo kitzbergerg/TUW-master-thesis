@@ -48,14 +48,13 @@ app.use(function (req, res, next) {
   );
   next();
 });
-app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'model')));
 
 // Create HTTP server
 const server = http.createServer(app);
 
 // Create WebSocket server
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, path: "/ws" });
 
 // Store connected clients
 const workerClients = {};
