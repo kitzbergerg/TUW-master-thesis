@@ -226,6 +226,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
     // Process incoming messages
     while let Some(result) = receiver.next().await {
+        // TODO: use more efficient encoding, json is bad for numbers
         match result {
             Ok(Message::Text(text)) => {
                 let state = state.clone();
@@ -238,6 +239,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             _ => println!("Unexpected message"),
         }
     }
+
+    // TODO: handle missing cache in case of ongoing inference request
 
     // Client disconnected
     println!("Client disconnected: {user_id}");
