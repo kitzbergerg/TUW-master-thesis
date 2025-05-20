@@ -9,6 +9,7 @@
         -   rebuild cache on different node in case of disconnect
         -   use extra clients instead of just 1 client per node
     -   Split model further (two/four/eight parts)
+    -   use headless chrome so it can connect from servers
 -   WebLLM/MLC/TVM
     -   Compile and run non-standard model
     -   Run split model?
