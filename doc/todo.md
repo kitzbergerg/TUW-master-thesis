@@ -1,12 +1,19 @@
 # TODO
 
--   WebLLM
+-   Distributed inference
+    -   Improve performance
+        -   better (de)serialization (sending json is inefficient)
+        -   onnx graph optimizations
+        -   quantization
+    -   Handle connecting/disconnecting clients
+        -   rebuild cache on different node in case of disconnect
+        -   use extra clients instead of just 1 client per node
+    -   Split model further (two/four/eight parts)
+-   WebLLM/MLC/TVM
     -   Compile and run non-standard model
-    -   Split model and run split model using webllm (if not possible use MLC/TVM directly)
+    -   Run split model?
 -   Transformers.js
     -   Compile and run non-standard model
-    -   Run split model
+    -   Run split model?
     -   Explore how transformers uses ONNX runtime
--   Run gemma3 on all variants.
--   Run split gemma3 on variants where this is possible.
 -   Decision: [inference-framework](./decisions/1.1-inference-framework.md)
