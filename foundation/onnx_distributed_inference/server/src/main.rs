@@ -44,7 +44,13 @@ struct ActiveRequest {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ModelConfig {
     model_uri: String,
-    external_data: serde_json::Value,
+    external_data: Vec<ExternalDataEntry>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct ExternalDataEntry {
+    path: String,
+    data: String,
 }
 
 // Input tensors for model inference
@@ -57,9 +63,9 @@ enum ModelInput {
 // Input tensors for model inference
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct FirstInput {
-    input_ids: Vec<String>,
-    attention_mask: Vec<String>,
-    position_ids: Vec<String>,
+    input_ids: Vec<u32>,
+    attention_mask: Vec<u32>,
+    position_ids: Vec<u32>,
 }
 
 // Output tensors from model inference
@@ -69,7 +75,6 @@ enum ModelOutput {
     Final { logits: FinalOutput },
     Intermediate(HashMap<String, IntermediateResult>),
 }
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct FinalOutput {
     data: Vec<f64>,
@@ -128,10 +133,8 @@ async fn main() {
     let vocab_size = 51200;
 
     // Load external data
-    let external_data_p1: serde_json::Value = serde_json::from_str(include_str!("../data_p1.json"))
-        .expect("Failed to parse data_p1.json");
-    let external_data_p2: serde_json::Value = serde_json::from_str(include_str!("../data_p2.json"))
-        .expect("Failed to parse data_p2.json");
+    let external_data_p1 = serde_json::from_str(include_str!("../data_p1.json")).unwrap();
+    let external_data_p2 = serde_json::from_str(include_str!("../data_p2.json")).unwrap();
 
     // Create graph
     let end_config = ModelConfig {
@@ -289,19 +292,19 @@ async fn handle_inference_request(text: String, user_uuid: &Uuid, state: &Arc<Ap
     let encoding = state.tokenizer.encode(text, false).unwrap();
     let input_ids = encoding.get_ids().to_vec();
     let attention_mask = encoding.get_attention_mask().to_vec();
-    let position_ids = (0..input_ids.len()).collect::<Vec<_>>();
-
-    // Create model input
-    let input = FirstInput {
-        input_ids: input_ids.iter().map(|x| x.to_string()).collect(),
-        attention_mask: attention_mask.iter().map(|x| x.to_string()).collect(),
-        position_ids: position_ids.iter().map(|x| x.to_string()).collect(),
-    };
+    let position_ids = (0..input_ids.len()).map(|x| x as u32).collect::<Vec<_>>();
 
     println!(
         "Processing inference request with {} tokens",
         input_ids.len()
     );
+
+    // Create model input
+    let input = FirstInput {
+        input_ids: input_ids.clone(),
+        attention_mask,
+        position_ids,
+    };
 
     // Get worker for start node
     let start_node_id = state.graph.read().await.start_node_id;
@@ -447,9 +450,9 @@ async fn handle_computation_result(result: ComputationResultMessage, state: &Arc
     };
 
     let input = FirstInput {
-        input_ids: vec![next_token.to_string()],
-        attention_mask: vec!["1".to_string()],
-        position_ids: vec![position.to_string()],
+        input_ids: vec![next_token],
+        attention_mask: vec![1],
+        position_ids: vec![position as u32],
     };
 
     // Get worker for start node and send next computation

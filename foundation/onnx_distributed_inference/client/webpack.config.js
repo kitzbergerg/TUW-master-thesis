@@ -5,12 +5,21 @@ module.exports = {
   entry: {
     main: './index.js',
   },
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        use: 'ts-loader',
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  resolve: {
+    extensions: ['.tsx', '.ts', '.js'],
+  },
   output: {
+    filename: 'bundle.js',
     path: path.resolve(__dirname, 'dist'),
-    filename: (pathData) => {
-      return pathData.chunk.name === 'main' ? 'bundle.js' : '[name]/bundle.js';
-    },
-    clean: true,
   },
   plugins: [new CopyPlugin({
     // Use copy plugin to copy *.wasm to output folder.

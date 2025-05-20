@@ -1,78 +1,112 @@
-import * as ort from 'onnxruntime-web';
+import { InferenceSession } from './onnx_session'
 
-const numLayers = 32;
-const hiddenSize = 2560;
-const numHeads = 32;
-const headDim = hiddenSize / numHeads;
+document.addEventListener('DOMContentLoaded', () => {
+    const chatContainer = document.getElementById('chat-container');
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    const connectionStatus = document.getElementById('connection-status');
+    const connectedUsers = document.getElementById('connected-users');
 
-async function createSession(modelPath, externalData) {
-    return await ort.InferenceSession.create(modelPath, {
-        executionProviders: ['webgpu'],
-        preferredOutputLocation: 'gpu-buffer',
-        externalData
+    let session = undefined;
+
+    // Connect to WebSocket server
+    const wsUrl = `ws://localhost:3000/ws`;
+    const socket = new WebSocket(wsUrl);
+
+    // Handle connection open
+    socket.addEventListener('open', () => {
+        connectionStatus.textContent = 'Connected';
+        connectionStatus.style.color = 'green';
+
+        // Enable the message form
+        messageForm.querySelector('button').disabled = false;
+        messageInput.disabled = false;
     });
-}
 
-const pastKeyValues = new Map()
+    // Handle connection close
+    socket.addEventListener('close', () => {
+        connectionStatus.textContent = 'Disconnected - Refresh to reconnect';
+        connectionStatus.style.color = 'red';
 
-async function runInference(session, requestId, input) {
-    console.log("Inference request: ", requestId, input)
+        // Disable the message form
+        messageForm.querySelector('button').disabled = true;
+        messageInput.disabled = true;
+    });
 
-    const isFirstBlock = 'input_ids' in input;
-    const isFirstRequest = !pastKeyValues.has(requestId)
+    // Handle WebSocket errors
+    socket.addEventListener('error', (error) => {
+        console.error('WebSocket error:', error);
+        connectionStatus.textContent = 'Connection error - See console for details';
+        connectionStatus.style.color = 'red';
+    });
 
-    let feeds;
-    if (isFirstBlock) {
-        const seqLen = input.input_ids.length;
-        feeds = {
-            input_ids: new ort.Tensor('int64', BigInt64Array.from(input.input_ids), [1, seqLen]),
-            attention_mask: new ort.Tensor('int64', BigInt64Array.from(input.attention_mask), [1, seqLen]),
-            position_ids: new ort.Tensor('int64', BigInt64Array.from(input.position_ids), [1, seqLen]),
-        }
-    } else {
-        feeds = {};
-        for (const [key, value] of Object.entries(input)) {
-            feeds[key] = new ort.Tensor('float32', Float32Array.from(value.data), value.dims)
-        }
-    }
+    // Handle incoming messages
+    socket.addEventListener('message', async (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            console.log(data);
 
-    // TODO: figure out how to get num of layers
-    const layerStart = isFirstBlock ? 0 : numLayers / 2;
-    const layerEnd = isFirstBlock ? numLayers / 2 : numLayers;
-    if (isFirstRequest) {
-        for (let layer = layerStart; layer < layerEnd; layer++) {
-            feeds[`past_key_values.${layer}.key`] = new ort.Tensor('float32', new Float32Array(0), [1, numHeads, 0, headDim]);
-            feeds[`past_key_values.${layer}.value`] = new ort.Tensor('float32', new Float32Array(0), [1, numHeads, 0, headDim]);
-        }
-    } else {
-        const cache = pastKeyValues.get(requestId);
-        for (let layer = layerStart; layer < layerEnd; layer++) {
-            feeds[`past_key_values.${layer}.key`] = cache[`present.${layer}.key`];
-            feeds[`past_key_values.${layer}.value`] = cache[`present.${layer}.value`];
-        }
-    }
-    console.log("Model input: ", feeds)
-    const inferenceResults = await session.run(feeds);
-    console.log("Model output: ", inferenceResults)
-
-    const result = {}
-    if (isFirstRequest) pastKeyValues.set(requestId, {})
-    const cache = pastKeyValues.get(requestId);
-    for (const name in inferenceResults) {
-        if (name.startsWith('present.')) {
-            cache[name] = inferenceResults[name];
-        } else {
-            result[name] = {
-                data: Array.from(await inferenceResults[name].getData()),
-                dims: inferenceResults[name].dims
+            switch (data.type) {
+                case 'initialize': {
+                    console.log('Loading model: ', data.message);
+                    session = await InferenceSession.createSession(data.message.model_uri, data.message.external_data);
+                    const response = { type: 'initializeDone' };
+                    socket.send(JSON.stringify(response));
+                    console.log('Finished loading model');
+                    break;
+                }
+                case 'connectedUsers':
+                    connectedUsers.textContent = data.message;
+                    break;
+                case 'computation': {
+                    console.log('Running computation: ', data);
+                    const result = await session.runInference(data.message.requestId, data.message.data);
+                    const response = {
+                        type: 'computationResult',
+                        message: {
+                            nodeId: data.message.nodeId,
+                            requestId: data.message.requestId,
+                            data: result,
+                        },
+                    };
+                    socket.send(JSON.stringify(response));
+                    break;
+                }
+                case 'inferenceResult':
+                    displayMessage(data.message);
+                    break;
+                default:
+                    console.error('Unknown type');
             }
+        } catch (error) {
+            console.error('Error parsing message:', error);
         }
+    });
+
+    // Handle form submission
+    messageForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+
+        const message = messageInput.value.trim();
+        if (!message) return;
+
+        const messageObj = { type: 'inferenceRequest', message };
+        socket.send(JSON.stringify(messageObj));
+
+        // Clear input field
+        messageInput.value = '';
+    });
+
+    // Display message in chat container
+    function displayMessage(message) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message';
+        messageDiv.textContent = message;
+
+        // Add message to chat container
+        chatContainer.appendChild(messageDiv);
+
+        // Auto-scroll to the bottom
+        chatContainer.scrollTop = chatContainer.scrollHeight;
     }
-
-    console.log("Inference response: ", result)
-    return result
-
-}
-
-window.createSession = createSession
-window.runInference = runInference
+});
