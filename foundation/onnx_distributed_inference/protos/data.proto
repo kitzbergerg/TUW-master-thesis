@@ -11,6 +11,7 @@ message WebSocketMessage {
     InferenceRequest inference_request = 4;
     Computation computation = 5;
     InferenceResult inference_result = 6;
+    InvalidateCache invalidate_cache = 7;
   }
 }
 
@@ -37,6 +38,10 @@ message Computation {
 
 message InferenceResult {
   string message = 1;
+}
+
+message InvalidateCache {
+  optional string request_id = 1;
 }
 
 

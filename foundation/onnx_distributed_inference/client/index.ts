@@ -82,6 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'inferenceResult':
                     displayMessage(data.value.message);
                     break;
+                case 'invalidateCache':
+                    session.invalidateCache(data.value.requestId);
+                    break;
                 default:
                     console.error('Unknown type');
             }

@@ -37,12 +37,9 @@ export class InferenceSession {
 
         const isFirstRequest = !this.pastKeyValues.has(requestId)
 
-        // TODO: how to handle missing cache after node disconnect
         let feeds: OnnxSessionInput = {};
         switch (input.case) {
             case "first": {
-                // TODO: when the first node rebuilds the cache the intermediate output is larger than the variant with cache
-                // TODO: this results in an error in the next block
                 const inputIds = isFirstRequest ? input.value.inputIds : input.value.inputIds.slice(-1);
                 const seqLen = inputIds.length;
                 const attentionMask = new Array(seqLen).fill(1);
@@ -54,8 +51,6 @@ export class InferenceSession {
                 break;
             }
             case "intermediate": {
-                // TODO: if the intermediate node disconnects it doesn't have enough input data to rebuild the cache, i.e. the input is to small
-                // TODO: this means the computation goes on, but the output is incorrect
                 for (const [key, value] of Object.entries(input.value.map)) {
                     feeds[key] = new ort.Tensor('float32', Float32Array.from(value.data), value.dims)
                 }
@@ -109,5 +104,13 @@ export class InferenceSession {
                 case: "intermediate"
             }
         });
+    }
+
+    invalidateCache(requestId?: string) {
+        if (requestId == null) {
+            this.pastKeyValues.clear();
+        } else {
+            this.pastKeyValues.delete(requestId);
+        }
     }
 }

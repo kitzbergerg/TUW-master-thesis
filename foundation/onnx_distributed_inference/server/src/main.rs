@@ -20,13 +20,13 @@ use tokio::sync::{Mutex, mpsc::UnboundedSender};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
-use websocket_messages::websocket::web_socket_message::Kind;
 use websocket_messages::websocket::{
     Computation, ComputationMessage, ConnectedUsers, ExternalDataEntry, FirstModelInput,
     InferenceRequest, InferenceResult, Initialize, IntermediateModelData, ModelConfig,
     WebSocketMessage,
 };
 use websocket_messages::websocket::{InitializeDone, computation_message::Data};
+use websocket_messages::websocket::{InvalidateCache, web_socket_message::Kind};
 
 mod graph;
 
@@ -46,11 +46,8 @@ struct ComputationalGraph {
     workers: HashMap<Uuid, Worker>,
     /// Maps nodes to their workers (inverse of workers)
     assigned_nodes: HashMap<Uuid, (Uuid, Status)>,
-    /// Maps users to their inference requests
+    /// Maps request_ids to their data
     inference_requests: HashMap<Uuid, ActiveInferenceRequest>,
-    /// Maps (worker, node) pairs to requests currently being processed by them.
-    /// Used to reassign requests in case of disconnect.
-    active_computations: HashMap<(Uuid, Uuid), Vec<ActiveComputation>>,
     /// Maps nodes to a list of (original user, message) pairs
     pending_requests: HashMap<Uuid, Vec<ActiveComputation>>,
 }
@@ -105,18 +102,30 @@ impl ComputationalGraph {
             .for_each(|vec| vec.retain(|computation| computation.original_user_id != user_id));
 
         if let Some(assigned_node) = self.workers.remove(&user_id).unwrap().assigned_node {
-            tracing::info!("Attempting to reassign node {assigned_node}...");
             self.assigned_nodes.remove(&assigned_node).unwrap();
-            if let Some(interrupted_computations) =
-                self.active_computations.remove(&(user_id, assigned_node))
-            {
-                tracing::info!("Rescheduling active_computations...");
-                self.pending_requests
-                    .entry(assigned_node)
-                    .or_default()
-                    .extend(interrupted_computations);
+
+            // invalidate all previous requests and caches
+            // necessary since workers need to rebuild kv caches
+            // TODO: allow graceful shutdown of worker
+            tracing::info!("Invalidating caches and rescheduling inference requests...");
+            self.invalidate_cache(None);
+            self.pending_requests.clear();
+            let drained = self
+                .inference_requests
+                .drain()
+                .map(|(_, request)| request)
+                .collect::<Vec<_>>();
+            for request in drained {
+                self.send_inference_request(
+                    Uuid::new_v4(),
+                    request.original_user_id,
+                    request.input_token_len,
+                    request.tokens,
+                )
+                .await;
             }
 
+            tracing::info!("Attempting to reassign node {assigned_node}...");
             match self
                 .workers
                 .iter()
@@ -126,7 +135,6 @@ impl ComputationalGraph {
                 None => tracing::info!("Currently no suitable worker to reassign node"),
             }
         }
-
         self.broadcast_connected_users().await;
     }
 
@@ -149,6 +157,7 @@ impl ComputationalGraph {
         &mut self,
         request_id: Uuid,
         original_user_id: Uuid,
+        input_token_len: usize,
         input_ids: Vec<u32>,
     ) {
         let node_id = self.structure.start_node_id;
@@ -167,7 +176,7 @@ impl ComputationalGraph {
             request_id,
             ActiveInferenceRequest {
                 original_user_id,
-                input_token_len: input_ids.len(),
+                input_token_len,
                 tokens: input_ids.clone(),
             },
         );
@@ -183,9 +192,7 @@ impl ComputationalGraph {
     pub fn schedule_computation(&mut self, node_id: Uuid, computation: ActiveComputation) {
         let worker = self.assigned_nodes.get(&node_id).copied();
         match worker {
-            Some((worker_id, Status::Available)) => {
-                self.send_computation(node_id, worker_id, computation)
-            }
+            Some((worker_id, Status::Available)) => self.send_computation(worker_id, computation),
             _ => {
                 // no worker for now, handle message later
                 tracing::info!("Waiting for node {node_id} to be ready...");
@@ -197,7 +204,7 @@ impl ComputationalGraph {
         }
     }
 
-    fn send_computation(&mut self, node_id: Uuid, worker_id: Uuid, computation: ActiveComputation) {
+    fn send_computation(&mut self, worker_id: Uuid, computation: ActiveComputation) {
         tracing::debug!("Sending computation to worker {worker_id}");
         self.workers
             .get(&worker_id)
@@ -205,10 +212,24 @@ impl ComputationalGraph {
             .sink
             .send(Message::Binary(proto_encode(&computation.message).into()))
             .unwrap();
-        self.active_computations
-            .entry((worker_id, node_id))
-            .or_default()
-            .push(computation);
+    }
+
+    fn invalidate_cache(&self, request_id: Option<Uuid>) {
+        match request_id {
+            Some(request_id) => tracing::debug!("Invalidating cache for request {request_id}"),
+            None => tracing::debug!("Invalidating all caches"),
+        }
+        let message = WebSocketMessage {
+            kind: Some(Kind::InvalidateCache(InvalidateCache {
+                request_id: request_id.map(|uuid| uuid.to_string()),
+            })),
+        };
+        let encoded = proto_encode(&message);
+
+        self.workers
+            .values()
+            .filter(|worker| worker.assigned_node.is_some())
+            .for_each(|worker| worker.sink.send(encoded.clone().into()).unwrap());
     }
 }
 
@@ -298,7 +319,6 @@ async fn main() {
             workers: HashMap::new(),
             assigned_nodes: HashMap::new(),
             inference_requests: HashMap::new(),
-            active_computations: HashMap::new(),
             pending_requests: HashMap::new(),
         }),
         tokenizer,
@@ -374,7 +394,7 @@ async fn handle_message(data: Bytes, user_id: Uuid, state: &Arc<AppState>) {
             if let Some(pending_requests) = lock.pending_requests.remove(&node_id) {
                 tracing::info!("Processing pending requests...");
                 pending_requests.into_iter().for_each(|computation| {
-                    lock.send_computation(node_id, user_id, computation);
+                    lock.send_computation(user_id, computation);
                 });
             }
         }
@@ -409,7 +429,7 @@ async fn handle_inference_request(text: String, user_id: Uuid, state: &Arc<AppSt
         .graph
         .lock()
         .await
-        .send_inference_request(request_id, user_id, input_ids)
+        .send_inference_request(request_id, user_id, input_ids.len(), input_ids)
         .await;
 }
 
@@ -424,9 +444,6 @@ async fn handle_computation_result(
 
     {
         let mut lock = state.graph.lock().await;
-        lock.active_computations
-            .remove(&(worker_id, node_id))
-            .unwrap();
 
         if let Some(next_node_id) = lock.structure.get_next_node(&node_id) {
             let original_user_id = match lock.inference_requests.get(&request_id) {
@@ -531,6 +548,7 @@ async fn handle_computation_result(
                 .send(Message::Binary(proto_encode(&message).into()))
                 .unwrap();
         }
+        lock.invalidate_cache(Some(request_id));
     }
 }
 

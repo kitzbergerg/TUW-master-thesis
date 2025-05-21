@@ -53,6 +53,12 @@ export declare type WebSocketMessage = Message<"websocket.WebSocketMessage"> & {
      */
     value: InferenceResult;
     case: "inferenceResult";
+  } | {
+    /**
+     * @generated from field: websocket.InvalidateCache invalidate_cache = 7;
+     */
+    value: InvalidateCache;
+    case: "invalidateCache";
   } | { case: undefined; value?: undefined };
 };
 
@@ -162,6 +168,22 @@ export declare type InferenceResult = Message<"websocket.InferenceResult"> & {
  * Use `create(InferenceResultSchema)` to create a new message.
  */
 export declare const InferenceResultSchema: GenMessage<InferenceResult>;
+
+/**
+ * @generated from message websocket.InvalidateCache
+ */
+export declare type InvalidateCache = Message<"websocket.InvalidateCache"> & {
+  /**
+   * @generated from field: optional string request_id = 1;
+   */
+  requestId?: string;
+};
+
+/**
+ * Describes the message websocket.InvalidateCache.
+ * Use `create(InvalidateCacheSchema)` to create a new message.
+ */
+export declare const InvalidateCacheSchema: GenMessage<InvalidateCache>;
 
 /**
  * @generated from message websocket.ModelConfig
