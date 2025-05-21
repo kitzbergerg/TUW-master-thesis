@@ -1,17 +1,20 @@
-import { InferenceSession } from './onnx_session'
+import { InferenceSession } from './src/onnx_session'
+import { ComputationMessageSchema, FirstModelInput, IntermediateModelData, WebSocketMessageSchema } from "./src/gen/data_pb";
+import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 
 document.addEventListener('DOMContentLoaded', () => {
     const chatContainer = document.getElementById('chat-container');
     const messageForm = document.getElementById('message-form');
-    const messageInput = document.getElementById('message-input');
+    const messageInput = document.getElementById('message-input') as HTMLInputElement;
     const connectionStatus = document.getElementById('connection-status');
     const connectedUsers = document.getElementById('connected-users');
 
-    let session = undefined;
+    let session: InferenceSession = undefined;
 
     // Connect to WebSocket server
     const wsUrl = `ws://localhost:3000/ws`;
     const socket = new WebSocket(wsUrl);
+    socket.binaryType = "arraybuffer";
 
     // Handle connection open
     socket.addEventListener('open', () => {
@@ -20,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Enable the message form
         messageForm.querySelector('button').disabled = false;
-        messageInput.disabled = false;
     });
 
     // Handle connection close
@@ -30,7 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Disable the message form
         messageForm.querySelector('button').disabled = true;
-        messageInput.disabled = true;
     });
 
     // Handle WebSocket errors
@@ -43,37 +44,41 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle incoming messages
     socket.addEventListener('message', async (event) => {
         try {
-            const data = JSON.parse(event.data);
-            console.log(data);
+            const data = fromBinary(WebSocketMessageSchema, new Uint8Array(event.data)).kind;
 
-            switch (data.type) {
+            switch (data.case) {
                 case 'initialize': {
-                    console.log('Loading model: ', data.message);
-                    session = await InferenceSession.createSession(data.message.model_uri, data.message.external_data);
-                    const response = { type: 'initializeDone' };
-                    socket.send(JSON.stringify(response));
+                    console.log('Loading model: ', data.value.message);
+                    session = await InferenceSession.createSession(data.value.message.modelUri, data.value.message.externalData);
+                    const response = create(WebSocketMessageSchema, {
+                        kind: {
+                            case: 'initializeDone',
+                            value: {}
+                        }
+                    });
+                    socket.send(toBinary(WebSocketMessageSchema, response));
                     console.log('Finished loading model');
                     break;
                 }
                 case 'connectedUsers':
-                    connectedUsers.textContent = data.message;
+                    connectedUsers.textContent = data.value.message.toString();
                     break;
                 case 'computation': {
                     console.log('Running computation: ', data);
-                    const result = await session.runInference(data.message.requestId, data.message.data);
-                    const response = {
-                        type: 'computationResult',
-                        message: {
-                            nodeId: data.message.nodeId,
-                            requestId: data.message.requestId,
-                            data: result,
-                        },
-                    };
-                    socket.send(JSON.stringify(response));
+                    const result = await session.runInference(data.value.message);
+                    const response = create(WebSocketMessageSchema, {
+                        kind: {
+                            case: 'computation',
+                            value: {
+                                message: result
+                            }
+                        }
+                    });
+                    socket.send(toBinary(WebSocketMessageSchema, response));
                     break;
                 }
                 case 'inferenceResult':
-                    displayMessage(data.message);
+                    displayMessage(data.value.message);
                     break;
                 default:
                     console.error('Unknown type');
@@ -90,15 +95,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const message = messageInput.value.trim();
         if (!message) return;
 
-        const messageObj = { type: 'inferenceRequest', message };
-        socket.send(JSON.stringify(messageObj));
+        const messageObj = create(WebSocketMessageSchema, {
+            kind: {
+                case: 'inferenceRequest',
+                value: {
+                    message
+                }
+            }
+        });
+        socket.send(toBinary(WebSocketMessageSchema, messageObj));
 
         // Clear input field
-        messageInput.value = '';
+        messageInput.innerText = '';
     });
 
     // Display message in chat container
-    function displayMessage(message) {
+    function displayMessage(message: string) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message';
         messageDiv.textContent = message;

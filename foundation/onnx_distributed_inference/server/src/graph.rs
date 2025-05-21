@@ -4,12 +4,11 @@ use uuid::Uuid;
 
 use crate::ModelConfig;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Node {
     pub id: Uuid,
     pub next_nodes: Vec<Uuid>,
     pub data: ModelConfig,
-    #[serde(skip)]
     users: Vec<(Uuid, Status)>,
 }
 

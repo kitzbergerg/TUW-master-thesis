@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package websocket;
+
+
+message WebSocketMessage {
+  oneof kind {
+    ConnectedUsers connected_users = 1;
+    Initialize initialize = 2;
+    InitializeDone initialize_done = 3;
+    InferenceRequest inference_request = 4;
+    Computation computation = 5;
+    InferenceResult inference_result = 6;
+  }
+}
+
+message ConnectedUsers {
+  uint32 message = 1;
+}
+
+message Initialize {
+  ModelConfig message = 1;
+}
+
+message InitializeDone {}
+
+message InferenceRequest {
+  string message = 1;
+}
+
+message Computation {
+  ComputationMessage message = 1;
+}
+
+message InferenceResult {
+  string message = 1;
+}
+
+
+message ModelConfig {
+  string model_uri = 1;
+  repeated ExternalDataEntry external_data = 2;
+}
+
+message ComputationMessage {
+  string node_id = 1;
+  string request_id = 2;
+  oneof data {
+    FirstModelInput first = 3;
+    IntermediateModelData intermediate = 4;
+    FinalModelOutput logits = 5;
+  }
+}
+
+
+message ExternalDataEntry {
+  string path = 1;
+  string data = 2;
+}
+
+message FirstModelInput {
+  repeated uint32 input_ids = 1;
+  repeated uint32 attention_mask = 2;
+  repeated uint32 position_ids = 3;
+}
+
+message IntermediateModelData {
+  map<string, IntermediateResult> map = 1;
+}
+
+message IntermediateResult {
+  repeated float data = 1;
+  repeated uint32 dims = 2;
+}
+
+message FinalModelOutput {
+  repeated float data = 1;
+}
