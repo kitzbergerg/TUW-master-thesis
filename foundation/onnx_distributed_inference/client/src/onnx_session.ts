@@ -11,7 +11,6 @@ type OnnxSessionInput = { [name: string]: ort.OnnxValue };
 
 export class InferenceSession {
     session: ort.InferenceSession;
-    // TODO: clear cache after inference is done
     pastKeyValues: Map<string, ort.InferenceSession.OnnxValueMapType>;
 
     constructor(session: ort.InferenceSession, pastKeyValues: Map<string, ort.InferenceSession.OnnxValueMapType>) {
@@ -58,7 +57,7 @@ export class InferenceSession {
             }
         }
 
-        // TODO: figure out how to get num of layers
+        // TODO: get layer/split information from server
         const isFirstBlock = input.case == "first";
         const layerStart = isFirstBlock ? 0 : numLayers / 2;
         const layerEnd = isFirstBlock ? numLayers / 2 : numLayers;

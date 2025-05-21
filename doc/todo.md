@@ -1,15 +1,12 @@
 # TODO
 
 -   Distributed inference
+    -   Figure out why ollama phi generates better answers than web (chat template?, system prompt?)
+    -   Allow for full chat (generate till end token, handle system/agent/user switch)
     -   Improve performance
-        -   better (de)serialization (sending json is inefficient)
         -   onnx graph optimizations
         -   quantization
-    -   Handle connecting/disconnecting clients
-        -   rebuild cache on different node in case of disconnect
-        -   use extra clients instead of just 1 client per node
-    -   Split model further (two/four/eight parts)
-    -   use headless chrome so it can connect from servers
+    -   Split model further (four/eight parts)
 -   WebLLM/MLC/TVM
     -   Compile and run non-standard model
     -   Run split model?
