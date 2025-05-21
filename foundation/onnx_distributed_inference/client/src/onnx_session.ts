@@ -11,6 +11,7 @@ type OnnxSessionInput = { [name: string]: ort.OnnxValue };
 
 export class InferenceSession {
     session: ort.InferenceSession;
+    // TODO: clear cache after inference is done
     pastKeyValues: Map<string, ort.InferenceSession.OnnxValueMapType>;
 
     constructor(session: ort.InferenceSession, pastKeyValues: Map<string, ort.InferenceSession.OnnxValueMapType>) {
@@ -36,10 +37,12 @@ export class InferenceSession {
 
         const isFirstRequest = !this.pastKeyValues.has(requestId)
 
+        // TODO: how to handle missing cache after node disconnect
         let feeds: OnnxSessionInput = {};
         switch (input.case) {
             case "first": {
-                // TODO: there is some error when a client disconnects and the next one has to rebuild the case
+                // TODO: when the first node rebuilds the cache the intermediate output is larger than the variant with cache
+                // TODO: this results in an error in the next block
                 const inputIds = isFirstRequest ? input.value.inputIds : input.value.inputIds.slice(-1);
                 const seqLen = inputIds.length;
                 const attentionMask = new Array(seqLen).fill(1);
@@ -51,7 +54,8 @@ export class InferenceSession {
                 break;
             }
             case "intermediate": {
-                // TODO: how to handle missing cache
+                // TODO: if the intermediate node disconnects it doesn't have enough input data to rebuild the cache, i.e. the input is to small
+                // TODO: this means the computation goes on, but the output is incorrect
                 for (const [key, value] of Object.entries(input.value.map)) {
                     feeds[key] = new ort.Tensor('float32', Float32Array.from(value.data), value.dims)
                 }

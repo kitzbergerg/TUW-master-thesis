@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use axum::{
     Router,
+    body::Bytes,
     extract::{
         State,
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -15,41 +16,222 @@ use futures_util::{sink::SinkExt, stream::StreamExt};
 use prost::Message as ProstMessage;
 use serde::{Deserialize, Serialize};
 use tokenizers::tokenizer::Tokenizer;
-use tokio::sync::{RwLock, mpsc::UnboundedSender};
+use tokio::sync::{Mutex, mpsc::UnboundedSender};
 use tower_http::{cors::CorsLayer, services::ServeDir};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
-use websocket_messages::websocket::computation_message::Data;
 use websocket_messages::websocket::web_socket_message::Kind;
 use websocket_messages::websocket::{
     Computation, ComputationMessage, ConnectedUsers, ExternalDataEntry, FirstModelInput,
     InferenceRequest, InferenceResult, Initialize, IntermediateModelData, ModelConfig,
     WebSocketMessage,
 };
+use websocket_messages::websocket::{InitializeDone, computation_message::Data};
 
 mod graph;
 
-use crate::graph::{Graph, Node};
+use crate::graph::{Node, StructuralGraph};
 
 // Main application state
 struct AppState {
-    graph: RwLock<ComputationalGraph>,
+    // use Mutex instead of RwLock since basically every access is write
+    graph: Mutex<ComputationalGraph>,
     tokenizer: Tokenizer,
     vocab_size: usize,
 }
 
 struct ComputationalGraph {
-    graph: Graph,
-    workers: HashMap<Uuid, UnboundedSender<Message>>,
-    active_requests: HashMap<Uuid, ActiveRequest>,
-    pending_requests: HashMap<Uuid, Vec<WebSocketMessage>>,
+    structure: StructuralGraph,
+    /// Maps workers ids to their assigned node and socket connection
+    workers: HashMap<Uuid, Worker>,
+    /// Maps nodes to their workers (inverse of workers)
+    assigned_nodes: HashMap<Uuid, (Uuid, Status)>,
+    /// Maps users to their inference requests
+    inference_requests: HashMap<Uuid, ActiveInferenceRequest>,
+    /// Maps (worker, node) pairs to requests currently being processed by them.
+    /// Used to reassign requests in case of disconnect.
+    active_computations: HashMap<(Uuid, Uuid), Vec<ActiveComputation>>,
+    /// Maps nodes to a list of (original user, message) pairs
+    pending_requests: HashMap<Uuid, Vec<ActiveComputation>>,
 }
 
-// Tracking state for active inference requests
+impl ComputationalGraph {
+    pub async fn add_worker(&mut self, user_id: Uuid, tx: UnboundedSender<Message>) {
+        self.workers.insert(
+            user_id,
+            Worker {
+                assigned_node: None,
+                sink: tx.clone(),
+            },
+        );
+
+        let unassigned_node = self
+            .structure
+            .list_nodes()
+            .find(|node| !self.assigned_nodes.contains_key(node));
+        if let Some(unassigned_node) = unassigned_node {
+            self.assign_worker(user_id, *unassigned_node);
+        }
+        self.broadcast_connected_users().await;
+    }
+
+    pub fn assign_worker(&mut self, worker_id: Uuid, node_id: Uuid) {
+        let worker = self.workers.get_mut(&worker_id).unwrap();
+        assert!(worker.assigned_node.is_none());
+        assert!(!self.assigned_nodes.contains_key(&node_id));
+
+        tracing::info!("Assigning worker {worker_id} to node {node_id}");
+        self.assigned_nodes
+            .insert(node_id, (worker_id, Status::Loading));
+        worker.assigned_node = Some(node_id);
+
+        let message = WebSocketMessage {
+            kind: Some(Kind::Initialize(Initialize {
+                node_id: node_id.to_string(),
+                message: Some(self.structure.get_node(&node_id).unwrap().data.clone()),
+            })),
+        };
+        worker
+            .sink
+            .send(Message::Binary(proto_encode(&message).into()))
+            .unwrap();
+    }
+
+    pub async fn remove_worker(&mut self, user_id: Uuid) {
+        self.inference_requests
+            .retain(|_, v| v.original_user_id != user_id);
+        self.pending_requests
+            .values_mut()
+            .for_each(|vec| vec.retain(|computation| computation.original_user_id != user_id));
+
+        if let Some(assigned_node) = self.workers.remove(&user_id).unwrap().assigned_node {
+            tracing::info!("Attempting to reassign node {assigned_node}...");
+            self.assigned_nodes.remove(&assigned_node).unwrap();
+            if let Some(interrupted_computations) =
+                self.active_computations.remove(&(user_id, assigned_node))
+            {
+                tracing::info!("Rescheduling active_computations...");
+                self.pending_requests
+                    .entry(assigned_node)
+                    .or_default()
+                    .extend(interrupted_computations);
+            }
+
+            match self
+                .workers
+                .iter()
+                .find(|(_, worker)| worker.assigned_node.is_none())
+            {
+                Some((new_worker_id, _)) => self.assign_worker(*new_worker_id, assigned_node),
+                None => tracing::info!("Currently no suitable worker to reassign node"),
+            }
+        }
+
+        self.broadcast_connected_users().await;
+    }
+
+    async fn broadcast_connected_users(&self) {
+        let message = WebSocketMessage {
+            kind: Some(Kind::ConnectedUsers(ConnectedUsers {
+                message: self.workers.len() as u32,
+            })),
+        };
+        let data = proto_encode(&message);
+        self.workers.values().for_each(|worker| {
+            worker
+                .sink
+                .send(Message::Binary(data.clone().into()))
+                .unwrap();
+        })
+    }
+
+    async fn send_inference_request(
+        &mut self,
+        request_id: Uuid,
+        original_user_id: Uuid,
+        input_ids: Vec<u32>,
+    ) {
+        let node_id = self.structure.start_node_id;
+        let message = WebSocketMessage {
+            kind: Some(Kind::Computation(Computation {
+                message: Some(ComputationMessage {
+                    node_id: node_id.to_string(),
+                    request_id: request_id.to_string(),
+                    data: Some(Data::First(FirstModelInput {
+                        input_ids: input_ids.clone(),
+                    })),
+                }),
+            })),
+        };
+        self.inference_requests.insert(
+            request_id,
+            ActiveInferenceRequest {
+                original_user_id,
+                input_token_len: input_ids.len(),
+                tokens: input_ids.clone(),
+            },
+        );
+        self.schedule_computation(
+            node_id,
+            ActiveComputation {
+                original_user_id,
+                message,
+            },
+        );
+    }
+
+    pub fn schedule_computation(&mut self, node_id: Uuid, computation: ActiveComputation) {
+        let worker = self.assigned_nodes.get(&node_id).copied();
+        match worker {
+            Some((worker_id, Status::Available)) => {
+                self.send_computation(node_id, worker_id, computation)
+            }
+            _ => {
+                // no worker for now, handle message later
+                tracing::info!("Waiting for node {node_id} to be ready...");
+                self.pending_requests
+                    .entry(node_id)
+                    .or_default()
+                    .push(computation);
+            }
+        }
+    }
+
+    fn send_computation(&mut self, node_id: Uuid, worker_id: Uuid, computation: ActiveComputation) {
+        tracing::debug!("Sending computation to worker {worker_id}");
+        self.workers
+            .get(&worker_id)
+            .unwrap()
+            .sink
+            .send(Message::Binary(proto_encode(&computation.message).into()))
+            .unwrap();
+        self.active_computations
+            .entry((worker_id, node_id))
+            .or_default()
+            .push(computation);
+    }
+}
+
+struct Worker {
+    assigned_node: Option<Uuid>,
+    sink: UnboundedSender<Message>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+enum Status {
+    Loading,
+    Available,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct ActiveRequest {
-    user_id: Uuid,
+struct ActiveInferenceRequest {
+    original_user_id: Uuid,
     input_token_len: usize,
     tokens: Vec<u32>,
+}
+struct ActiveComputation {
+    original_user_id: Uuid,
+    message: WebSocketMessage,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -60,6 +242,21 @@ struct TmpExtEntry {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                // axum logs rejections from built-in extractors with the `axum::rejection`
+                // target, at `TRACE` level. `axum::rejection=trace` enables showing those events
+                format!(
+                    "{}=debug,tower_http=debug,axum::rejection=trace",
+                    env!("CARGO_CRATE_NAME")
+                )
+                .into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     // Initialize the tokenizer
     let tokenizer = Tokenizer::from_pretrained("microsoft/phi-2", None).unwrap();
     let vocab_size = 51200;
@@ -81,7 +278,6 @@ async fn main() {
             })
             .collect(),
     };
-
     let start_config = ModelConfig {
         model_uri: "http://localhost:3000/model/phi/split/p1/model.onnx".to_string(),
         external_data: external_data_p1
@@ -92,17 +288,17 @@ async fn main() {
             })
             .collect(),
     };
-
-    let end = Node::new(vec![], end_config);
-    let start = Node::new(vec![end.id], start_config);
-    let graph = Graph::new(vec![start, end]);
+    let end = Node::new(None, end_config);
+    let start = Node::new(Some(end.id), start_config);
 
     // Create shared state
     let state = Arc::new(AppState {
-        graph: RwLock::new(ComputationalGraph {
-            graph,
+        graph: Mutex::new(ComputationalGraph {
+            structure: StructuralGraph::new(vec![start, end]),
             workers: HashMap::new(),
-            active_requests: HashMap::new(),
+            assigned_nodes: HashMap::new(),
+            inference_requests: HashMap::new(),
+            active_computations: HashMap::new(),
             pending_requests: HashMap::new(),
         }),
         tokenizer,
@@ -117,10 +313,9 @@ async fn main() {
         .with_state(state);
 
     // Run the server
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
-    println!("Server listening on http://127.0.0.1:3000");
+    let server_addr = "127.0.0.1:3000";
+    let listener = tokio::net::TcpListener::bind(server_addr).await.unwrap();
+    tracing::info!("Server listening on http://{server_addr}");
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -139,7 +334,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let send_task = tokio::spawn(async move {
         while let Some(message) = rx.recv().await {
             if let Err(err) = sender.send(message).await {
-                println!("Error sending message: {err}");
+                tracing::error!("Error sending message: {err}");
                 break;
             }
         }
@@ -147,86 +342,39 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
     // Generate a unique user ID
     let user_id = Uuid::new_v4();
-    println!("Client connected: {user_id}");
-
-    // Initialize the user in the graph and send initialization message if a node is assigned
-    let node_id = {
-        let mut lock = state.graph.write().await;
-        lock.workers.insert(user_id, tx.clone());
-        let node_id = lock.graph.add_worker(user_id);
-
-        let lock = lock.downgrade();
-        broadcast_connected_users(&lock.workers).await;
-        if let Some(node_id) = node_id {
-            println!("Assigning worker {user_id} to node {node_id}");
-            let node = lock.graph.get_node(&node_id).unwrap();
-
-            let message = WebSocketMessage {
-                kind: Some(Kind::Initialize(Initialize {
-                    message: Some(node.data.clone()),
-                })),
-            };
-            tx.send(Message::Binary(proto_encode(message).into()))
-                .unwrap();
-        }
-        node_id
-    };
+    tracing::info!("Client connected: {user_id}");
+    state.graph.lock().await.add_worker(user_id, tx).await;
 
     // Process incoming messages
     while let Some(result) = receiver.next().await {
         match result {
-            Ok(Message::Text(_)) => println!("Text message received"),
-            Ok(Message::Binary(data)) => {
-                let state = state.clone();
-                tokio::spawn(async move {
-                    handle_message(data.to_vec(), &user_id, &node_id, &state).await
-                });
-            }
+            Ok(Message::Binary(data)) => handle_message(data, user_id, &state).await,
             Ok(Message::Close(_)) => break,
-            _ => println!("Unexpected message"),
+            _ => tracing::warn!("Unexpected message"),
         }
     }
 
     // Client disconnected
-    println!("Client disconnected: {user_id}");
-
-    // Remove the client
-    {
-        let mut lock = state.graph.write().await;
-        lock.graph.remove_worker(&user_id);
-        lock.workers.remove(&user_id);
-        // TODO: remove from active/pending requests
-
-        let lock = lock.downgrade();
-        broadcast_connected_users(&lock.workers).await;
-    }
-
-    // Cancel the send task
+    tracing::info!("Client disconnected: {user_id}");
+    state.graph.lock().await.remove_worker(user_id).await;
     send_task.abort();
 }
 
-async fn handle_message(
-    data: Vec<u8>,
-    user_id: &Uuid,
-    node_id: &Option<Uuid>,
-    state: &Arc<AppState>,
-) {
+async fn handle_message(data: Bytes, user_id: Uuid, state: &Arc<AppState>) {
     let message = WebSocketMessage::decode(Cursor::new(&data)).unwrap();
     let message = message.kind.unwrap();
 
     match message {
-        Kind::InitializeDone(_) => {
-            println!("Worker ready: {user_id}");
-            let node_id = node_id.unwrap();
-            let mut lock = state.graph.write().await;
-            lock.graph.enable_worker(user_id, &node_id);
+        Kind::InitializeDone(InitializeDone { node_id }) => {
+            tracing::info!("Worker {user_id} ready for node {node_id}");
+            let node_id = Uuid::parse_str(&node_id).unwrap();
+            let mut lock = state.graph.lock().await;
+            lock.assigned_nodes.get_mut(&node_id).unwrap().1 = Status::Available;
 
             if let Some(pending_requests) = lock.pending_requests.remove(&node_id) {
-                let lock = lock.downgrade();
-                let tx = lock.workers.get(user_id).unwrap();
-                pending_requests.into_iter().for_each(|message| {
-                    tx.send(Message::Binary(proto_encode(message).into()))
-                        .unwrap();
+                tracing::info!("Processing pending requests...");
+                pending_requests.into_iter().for_each(|computation| {
+                    lock.send_computation(node_id, user_id, computation);
                 });
             }
         }
@@ -234,18 +382,19 @@ async fn handle_message(
             handle_inference_request(message, user_id, state).await;
         }
         Kind::Computation(Computation { message }) => {
-            let message = message.unwrap();
-            handle_computation_result(message, state).await;
+            handle_computation_result(message.unwrap(), user_id, state).await
         }
         _ => {
-            eprintln!("Received unexpected message type from client");
+            tracing::error!("Received unexpected message type from client");
         }
     }
 }
 
-async fn handle_inference_request(text: String, user_uuid: &Uuid, state: &Arc<AppState>) {
+async fn handle_inference_request(text: String, user_id: Uuid, state: &Arc<AppState>) {
     let request_id = Uuid::new_v4();
-    println!("Processing inference request {request_id} for user {user_uuid} with prompt '{text}'",);
+    tracing::info!(
+        "Scheduling inference request {request_id} for user {user_id} with prompt '{text}'",
+    );
 
     // Tokenize input text
     let input_ids = state
@@ -255,90 +404,54 @@ async fn handle_inference_request(text: String, user_uuid: &Uuid, state: &Arc<Ap
         .get_ids()
         .to_vec();
 
-    // Create model input
-    let input = FirstModelInput {
-        input_ids: input_ids.clone(),
-    };
-
-    // Send computational request
-    {
-        let mut lock = state.graph.write().await;
-        let node_id = lock.graph.start_node_id;
-        let message = WebSocketMessage {
-            kind: Some(Kind::Computation(Computation {
-                message: Some(ComputationMessage {
-                    node_id: node_id.to_string(),
-                    request_id: request_id.to_string(),
-                    data: Some(Data::First(input)),
-                }),
-            })),
-        };
-        lock.active_requests.insert(
-            request_id,
-            ActiveRequest {
-                user_id: *user_uuid,
-                input_token_len: input_ids.len(),
-                tokens: input_ids.clone(),
-            },
-        );
-        match lock.graph.get_worker(&node_id) {
-            Some(worker_id) => {
-                lock.downgrade()
-                    .workers
-                    .get(&worker_id)
-                    .unwrap()
-                    .send(Message::Binary(proto_encode(message).into()))
-                    .unwrap();
-            }
-            None => match lock.pending_requests.get_mut(&node_id) {
-                Some(messages) => messages.push(message),
-                None => {
-                    let _ = lock.pending_requests.insert(node_id, vec![message]);
-                }
-            },
-        }
-    }
+    // Send inference request
+    state
+        .graph
+        .lock()
+        .await
+        .send_inference_request(request_id, user_id, input_ids)
+        .await;
 }
 
-async fn handle_computation_result(result: ComputationMessage, state: &Arc<AppState>) {
+async fn handle_computation_result(
+    result: ComputationMessage,
+    worker_id: Uuid,
+    state: &Arc<AppState>,
+) {
     let request_id = Uuid::parse_str(&result.request_id).unwrap();
     let node_id = Uuid::parse_str(&result.node_id).unwrap();
-    println!("Processing for node: {node_id}, request: {request_id}");
+    tracing::debug!("Worker {worker_id} computed request {request_id} for node {node_id}");
 
-    // Get next nodes
     {
-        let mut lock = state.graph.write().await;
-        let next_nodes = lock.graph.get_next_nodes(&node_id).clone();
+        let mut lock = state.graph.lock().await;
+        lock.active_computations
+            .remove(&(worker_id, node_id))
+            .unwrap();
 
-        if !next_nodes.is_empty() {
-            for node_id in next_nodes {
-                println!("Forwarding to next node: {node_id}");
-                let message = WebSocketMessage {
-                    kind: Some(Kind::Computation(Computation {
-                        message: Some(ComputationMessage {
-                            node_id: node_id.to_string(),
-                            request_id: result.request_id.clone(),
-                            data: result.data.clone(),
-                        }),
-                    })),
-                };
+        if let Some(next_node_id) = lock.structure.get_next_node(&node_id) {
+            let original_user_id = match lock.inference_requests.get(&request_id) {
+                Some(active_request) => active_request.original_user_id,
+                // user disconnected or request was cancelled
+                None => return,
+            };
+            tracing::debug!("Forwarding to next node: {next_node_id}");
+            let message = WebSocketMessage {
+                kind: Some(Kind::Computation(Computation {
+                    message: Some(ComputationMessage {
+                        node_id: next_node_id.to_string(),
+                        request_id: result.request_id.clone(),
+                        data: result.data.clone(),
+                    }),
+                })),
+            };
 
-                match lock.graph.get_worker(&node_id) {
-                    Some(worker_id) => {
-                        lock.workers
-                            .get(&worker_id)
-                            .unwrap()
-                            .send(Message::Binary(proto_encode(message).into()))
-                            .unwrap();
-                    }
-                    None => match lock.pending_requests.get_mut(&node_id) {
-                        Some(messages) => messages.push(message),
-                        None => {
-                            let _ = lock.pending_requests.insert(node_id, vec![message]);
-                        }
-                    },
-                }
-            }
+            lock.schedule_computation(
+                next_node_id,
+                ActiveComputation {
+                    original_user_id,
+                    message,
+                },
+            );
             return;
         }
     }
@@ -354,7 +467,7 @@ async fn handle_computation_result(result: ComputationMessage, state: &Arc<AppSt
     let logits_slice = &logits[start_idx..];
     let next_token = arg_max(logits_slice);
 
-    println!(
+    tracing::debug!(
         "Generated token: {}, Decoded: {}",
         next_token,
         state.tokenizer.decode(&[next_token], false).unwrap()
@@ -362,15 +475,19 @@ async fn handle_computation_result(result: ComputationMessage, state: &Arc<AppSt
 
     // Update active request
     {
-        let mut lock = state.graph.write().await;
-        let active_request = lock.active_requests.get_mut(&request_id).unwrap();
+        let mut lock = state.graph.lock().await;
+        let active_request = match lock.inference_requests.get_mut(&request_id) {
+            Some(req) => req,
+            // user disconnected or request was cancelled
+            None => return,
+        };
         active_request.tokens.push(next_token);
 
         let gen_token_len = active_request.tokens.len() - active_request.input_token_len;
         if gen_token_len <= 20 {
-            // Get worker for start node and send next computation
+            // Send next computation
             let active_request = active_request.clone();
-            let node_id = lock.graph.start_node_id;
+            let node_id = lock.structure.start_node_id;
             let message = WebSocketMessage {
                 kind: Some(Kind::Computation(Computation {
                     message: Some(ComputationMessage {
@@ -382,30 +499,18 @@ async fn handle_computation_result(result: ComputationMessage, state: &Arc<AppSt
                     }),
                 })),
             };
-
-            match lock.graph.get_worker(&node_id) {
-                Some(worker_id) => {
-                    lock.downgrade()
-                        .workers
-                        .get(&worker_id)
-                        .unwrap()
-                        .send(Message::Binary(proto_encode(message).into()))
-                        .unwrap();
-                }
-                None => match lock.pending_requests.get_mut(&node_id) {
-                    Some(messages) => messages.push(message),
-                    None => {
-                        let _ = lock.pending_requests.insert(node_id, vec![message]);
-                    }
+            lock.schedule_computation(
+                node_id,
+                ActiveComputation {
+                    original_user_id: active_request.original_user_id,
+                    message,
                 },
-            }
+            );
             return;
         }
 
         // Generate final output and send to client
-        let active_request = lock.active_requests.remove(&request_id).unwrap();
-        let lock = lock.downgrade();
-
+        let active_request = lock.inference_requests.remove(&request_id).unwrap();
         let output_text = state
             .tokenizer
             .decode(
@@ -413,31 +518,19 @@ async fn handle_computation_result(result: ComputationMessage, state: &Arc<AppSt
                 false,
             )
             .unwrap();
-
-        println!("Final result: {output_text}");
+        tracing::info!("Inference result for request {request_id}: {output_text}");
 
         let message = WebSocketMessage {
             kind: Some(Kind::InferenceResult(InferenceResult {
                 message: output_text,
             })),
         };
-
-        if let Some(tx) = lock.workers.get(&active_request.user_id) {
-            tx.send(Message::Binary(proto_encode(message).into()))
+        if let Some(original_user_id) = lock.workers.get(&active_request.original_user_id) {
+            original_user_id
+                .sink
+                .send(Message::Binary(proto_encode(&message).into()))
                 .unwrap();
         }
-    }
-}
-
-async fn broadcast_connected_users(clients: &HashMap<Uuid, UnboundedSender<Message>>) {
-    let message = WebSocketMessage {
-        kind: Some(Kind::ConnectedUsers(ConnectedUsers {
-            message: clients.len() as u32,
-        })),
-    };
-    let data = proto_encode(message);
-    for tx in clients.values() {
-        tx.send(Message::Binary(data.clone().into())).unwrap();
     }
 }
 
@@ -450,7 +543,7 @@ fn arg_max(values: &[f32]) -> u32 {
         .unwrap_or(0)
 }
 
-fn proto_encode<T: ProstMessage>(message: T) -> Vec<u8> {
+fn proto_encode<T: ProstMessage>(message: &T) -> Vec<u8> {
     let mut buf = Vec::with_capacity(message.encoded_len());
     message.encode(&mut buf).unwrap();
     buf

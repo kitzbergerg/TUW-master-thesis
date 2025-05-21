@@ -53,7 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const response = create(WebSocketMessageSchema, {
                         kind: {
                             case: 'initializeDone',
-                            value: {}
+                            value: {
+                                nodeId: data.value.nodeId
+                            }
                         }
                     });
                     socket.send(toBinary(WebSocketMessageSchema, response));

@@ -19,10 +19,13 @@ message ConnectedUsers {
 }
 
 message Initialize {
-  ModelConfig message = 1;
+  string node_id = 1;
+  ModelConfig message = 2;
 }
 
-message InitializeDone {}
+message InitializeDone {
+  string node_id = 1;
+}
 
 message InferenceRequest {
   string message = 1;

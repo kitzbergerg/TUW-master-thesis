@@ -83,7 +83,12 @@ export declare const ConnectedUsersSchema: GenMessage<ConnectedUsers>;
  */
 export declare type Initialize = Message<"websocket.Initialize"> & {
   /**
-   * @generated from field: websocket.ModelConfig message = 1;
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: websocket.ModelConfig message = 2;
    */
   message?: ModelConfig;
 };
@@ -98,6 +103,10 @@ export declare const InitializeSchema: GenMessage<Initialize>;
  * @generated from message websocket.InitializeDone
  */
 export declare type InitializeDone = Message<"websocket.InitializeDone"> & {
+  /**
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
 };
 
 /**
