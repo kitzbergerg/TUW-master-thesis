@@ -204,12 +204,6 @@ export declare type ComputationMessage = Message<"websocket.ComputationMessage">
      */
     value: IntermediateModelData;
     case: "intermediate";
-  } | {
-    /**
-     * @generated from field: websocket.FinalModelOutput logits = 5;
-     */
-    value: FinalModelOutput;
-    case: "logits";
   } | { case: undefined; value?: undefined };
 };
 
@@ -248,16 +242,6 @@ export declare type FirstModelInput = Message<"websocket.FirstModelInput"> & {
    * @generated from field: repeated uint32 input_ids = 1;
    */
   inputIds: number[];
-
-  /**
-   * @generated from field: repeated uint32 attention_mask = 2;
-   */
-  attentionMask: number[];
-
-  /**
-   * @generated from field: repeated uint32 position_ids = 3;
-   */
-  positionIds: number[];
 };
 
 /**
@@ -302,20 +286,4 @@ export declare type IntermediateResult = Message<"websocket.IntermediateResult">
  * Use `create(IntermediateResultSchema)` to create a new message.
  */
 export declare const IntermediateResultSchema: GenMessage<IntermediateResult>;
-
-/**
- * @generated from message websocket.FinalModelOutput
- */
-export declare type FinalModelOutput = Message<"websocket.FinalModelOutput"> & {
-  /**
-   * @generated from field: repeated float data = 1;
-   */
-  data: number[];
-};
-
-/**
- * Describes the message websocket.FinalModelOutput.
- * Use `create(FinalModelOutputSchema)` to create a new message.
- */
-export declare const FinalModelOutputSchema: GenMessage<FinalModelOutput>;
 

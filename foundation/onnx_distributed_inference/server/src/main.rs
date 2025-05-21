@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
-use std::{collections::HashMap, time::Duration};
 
 use axum::{
     Router,
@@ -15,17 +15,15 @@ use futures_util::{sink::SinkExt, stream::StreamExt};
 use prost::Message as ProstMessage;
 use serde::{Deserialize, Serialize};
 use tokenizers::tokenizer::Tokenizer;
-use tokio::{
-    sync::{RwLock, mpsc::UnboundedSender},
-    time::sleep,
-};
+use tokio::sync::{RwLock, mpsc::UnboundedSender};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use uuid::Uuid;
 use websocket_messages::websocket::computation_message::Data;
 use websocket_messages::websocket::web_socket_message::Kind;
 use websocket_messages::websocket::{
-    Computation, ComputationMessage, ConnectedUsers, ExternalDataEntry, FinalModelOutput,
-    FirstModelInput, InferenceRequest, InferenceResult, Initialize, ModelConfig, WebSocketMessage,
+    Computation, ComputationMessage, ConnectedUsers, ExternalDataEntry, FirstModelInput,
+    InferenceRequest, InferenceResult, Initialize, IntermediateModelData, ModelConfig,
+    WebSocketMessage,
 };
 
 mod graph;
@@ -34,18 +32,24 @@ use crate::graph::{Graph, Node};
 
 // Main application state
 struct AppState {
-    worker_clients: RwLock<HashMap<Uuid, tokio::sync::mpsc::UnboundedSender<Message>>>,
-    active_requests: RwLock<HashMap<Uuid, ActiveRequest>>,
-    graph: RwLock<Graph>,
+    graph: RwLock<ComputationalGraph>,
     tokenizer: Tokenizer,
     vocab_size: usize,
 }
 
+struct ComputationalGraph {
+    graph: Graph,
+    workers: HashMap<Uuid, UnboundedSender<Message>>,
+    active_requests: HashMap<Uuid, ActiveRequest>,
+    pending_requests: HashMap<Uuid, Vec<WebSocketMessage>>,
+}
+
 // Tracking state for active inference requests
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct ActiveRequest {
     user_id: Uuid,
-    input_tokens: Vec<u32>,
-    generated_tokens: Vec<u32>,
+    input_token_len: usize,
+    tokens: Vec<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -95,9 +99,12 @@ async fn main() {
 
     // Create shared state
     let state = Arc::new(AppState {
-        worker_clients: RwLock::new(HashMap::new()),
-        active_requests: RwLock::new(HashMap::new()),
-        graph: RwLock::new(graph),
+        graph: RwLock::new(ComputationalGraph {
+            graph,
+            workers: HashMap::new(),
+            active_requests: HashMap::new(),
+            pending_requests: HashMap::new(),
+        }),
         tokenizer,
         vocab_size,
     });
@@ -126,13 +133,13 @@ async fn websocket_handler(
 
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
-    // Use a channel to handle sending messages
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     // Spawn a task to forward messages from the channel to the WebSocket
     let send_task = tokio::spawn(async move {
         while let Some(message) = rx.recv().await {
-            if sender.send(message).await.is_err() {
+            if let Err(err) = sender.send(message).await {
+                println!("Error sending message: {err}");
                 break;
             }
         }
@@ -142,39 +149,31 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let user_id = Uuid::new_v4();
     println!("Client connected: {user_id}");
 
-    // Store the client
-    {
-        let mut clients = state.worker_clients.write().await;
-        clients.insert(user_id, tx.clone());
-
-        // Broadcast the number of connected users
-        broadcast_connected_users(&clients).await;
-    }
-
     // Initialize the user in the graph and send initialization message if a node is assigned
-    let node_id = state.graph.write().await.add_worker(user_id);
-    if let Some(node_id) = node_id {
-        println!("Assigning worker {user_id} to node {node_id}");
-        let graph_data = state
-            .graph
-            .read()
-            .await
-            .get_node(&node_id)
-            .map(|node| node.data.clone());
+    let node_id = {
+        let mut lock = state.graph.write().await;
+        lock.workers.insert(user_id, tx.clone());
+        let node_id = lock.graph.add_worker(user_id);
 
-        if let Some(data) = graph_data {
+        let lock = lock.downgrade();
+        broadcast_connected_users(&lock.workers).await;
+        if let Some(node_id) = node_id {
+            println!("Assigning worker {user_id} to node {node_id}");
+            let node = lock.graph.get_node(&node_id).unwrap();
+
             let message = WebSocketMessage {
                 kind: Some(Kind::Initialize(Initialize {
-                    message: Some(data),
+                    message: Some(node.data.clone()),
                 })),
             };
-            let _ = tx.send(Message::Binary(proto_encode(message).into()));
+            tx.send(Message::Binary(proto_encode(message).into()))
+                .unwrap();
         }
-    }
+        node_id
+    };
 
     // Process incoming messages
     while let Some(result) = receiver.next().await {
-        // TODO: use more efficient encoding, json is bad for numbers
         match result {
             Ok(Message::Text(_)) => println!("Text message received"),
             Ok(Message::Binary(data)) => {
@@ -188,28 +187,22 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
-    // TODO: handle missing cache in case of ongoing inference request
-
     // Client disconnected
     println!("Client disconnected: {user_id}");
 
     // Remove the client
-    state.graph.write().await.remove_worker(&user_id);
     {
-        let mut clients = state.worker_clients.write().await;
-        clients.remove(&user_id);
+        let mut lock = state.graph.write().await;
+        lock.graph.remove_worker(&user_id);
+        lock.workers.remove(&user_id);
+        // TODO: remove from active/pending requests
 
-        broadcast_connected_users(&clients).await;
+        let lock = lock.downgrade();
+        broadcast_connected_users(&lock.workers).await;
     }
 
     // Cancel the send task
     send_task.abort();
-}
-
-fn proto_encode<T: ProstMessage>(message: T) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(message.encoded_len());
-    message.encode(&mut buf).unwrap();
-    buf
 }
 
 async fn handle_message(
@@ -222,11 +215,21 @@ async fn handle_message(
     let message = message.kind.unwrap();
 
     match message {
-        Kind::InitializeDone(_) => state
-            .graph
-            .write()
-            .await
-            .enable_worker(user_id, &node_id.unwrap()),
+        Kind::InitializeDone(_) => {
+            println!("Worker ready: {user_id}");
+            let node_id = node_id.unwrap();
+            let mut lock = state.graph.write().await;
+            lock.graph.enable_worker(user_id, &node_id);
+
+            if let Some(pending_requests) = lock.pending_requests.remove(&node_id) {
+                let lock = lock.downgrade();
+                let tx = lock.workers.get(user_id).unwrap();
+                pending_requests.into_iter().for_each(|message| {
+                    tx.send(Message::Binary(proto_encode(message).into()))
+                        .unwrap();
+                });
+            }
+        }
         Kind::InferenceRequest(InferenceRequest { message }) => {
             handle_inference_request(message, user_id, state).await;
         }
@@ -241,57 +244,59 @@ async fn handle_message(
 }
 
 async fn handle_inference_request(text: String, user_uuid: &Uuid, state: &Arc<AppState>) {
-    // Tokenize input text
-    let encoding = state.tokenizer.encode(text, false).unwrap();
-    let input_ids = encoding.get_ids().to_vec();
-    let attention_mask = encoding.get_attention_mask().to_vec();
-    let position_ids = (0..input_ids.len()).map(|x| x as u32).collect::<Vec<_>>();
+    let request_id = Uuid::new_v4();
+    println!("Processing inference request {request_id} for user {user_uuid} with prompt '{text}'",);
 
-    println!(
-        "Processing inference request with {} tokens",
-        input_ids.len()
-    );
+    // Tokenize input text
+    let input_ids = state
+        .tokenizer
+        .encode(text, false)
+        .unwrap()
+        .get_ids()
+        .to_vec();
 
     // Create model input
     let input = FirstModelInput {
         input_ids: input_ids.clone(),
-        attention_mask,
-        position_ids,
     };
 
-    // Get worker for start node
-    let start_node_id = state.graph.read().await.start_node_id;
-    let worker_id = match get_worker(state, start_node_id).await {
-        Some(id) => id,
-        None => return,
-    };
-
-    // Create request
-    let request_id = Uuid::new_v4();
-
-    // Store active request
-    state.active_requests.write().await.insert(
-        request_id,
-        ActiveRequest {
-            user_id: *user_uuid,
-            input_tokens: input_ids,
-            generated_tokens: Vec::new(),
-        },
-    );
-
-    // Send computation message to worker
-    if let Some(tx) = state.worker_clients.read().await.get(&worker_id) {
+    // Send computational request
+    {
+        let mut lock = state.graph.write().await;
+        let node_id = lock.graph.start_node_id;
         let message = WebSocketMessage {
             kind: Some(Kind::Computation(Computation {
                 message: Some(ComputationMessage {
-                    node_id: start_node_id.to_string(),
+                    node_id: node_id.to_string(),
                     request_id: request_id.to_string(),
                     data: Some(Data::First(input)),
                 }),
             })),
         };
-
-        let _ = tx.send(Message::Binary(proto_encode(message).into()));
+        lock.active_requests.insert(
+            request_id,
+            ActiveRequest {
+                user_id: *user_uuid,
+                input_token_len: input_ids.len(),
+                tokens: input_ids.clone(),
+            },
+        );
+        match lock.graph.get_worker(&node_id) {
+            Some(worker_id) => {
+                lock.downgrade()
+                    .workers
+                    .get(&worker_id)
+                    .unwrap()
+                    .send(Message::Binary(proto_encode(message).into()))
+                    .unwrap();
+            }
+            None => match lock.pending_requests.get_mut(&node_id) {
+                Some(messages) => messages.push(message),
+                None => {
+                    let _ = lock.pending_requests.insert(node_id, vec![message]);
+                }
+            },
+        }
     }
 }
 
@@ -301,32 +306,48 @@ async fn handle_computation_result(result: ComputationMessage, state: &Arc<AppSt
     println!("Processing for node: {node_id}, request: {request_id}");
 
     // Get next nodes
-    let next_nodes = state.graph.read().await.get_next_nodes(&node_id).clone();
+    {
+        let mut lock = state.graph.write().await;
+        let next_nodes = lock.graph.get_next_nodes(&node_id).clone();
 
-    if !next_nodes.is_empty() {
-        for node_id in next_nodes {
-            println!("Forwarding to next node: {node_id}");
-            if let Some(worker_id) = get_worker(state, node_id).await {
-                if let Some(tx) = state.worker_clients.read().await.get(&worker_id) {
-                    let message = WebSocketMessage {
-                        kind: Some(Kind::Computation(Computation {
-                            message: Some(ComputationMessage {
-                                node_id: node_id.to_string(),
-                                request_id: result.request_id.clone(),
-                                data: result.data.clone(),
-                            }),
-                        })),
-                    };
-                    let _ = tx.send(Message::Binary(proto_encode(message).into()));
+        if !next_nodes.is_empty() {
+            for node_id in next_nodes {
+                println!("Forwarding to next node: {node_id}");
+                let message = WebSocketMessage {
+                    kind: Some(Kind::Computation(Computation {
+                        message: Some(ComputationMessage {
+                            node_id: node_id.to_string(),
+                            request_id: result.request_id.clone(),
+                            data: result.data.clone(),
+                        }),
+                    })),
+                };
+
+                match lock.graph.get_worker(&node_id) {
+                    Some(worker_id) => {
+                        lock.workers
+                            .get(&worker_id)
+                            .unwrap()
+                            .send(Message::Binary(proto_encode(message).into()))
+                            .unwrap();
+                    }
+                    None => match lock.pending_requests.get_mut(&node_id) {
+                        Some(messages) => messages.push(message),
+                        None => {
+                            let _ = lock.pending_requests.insert(node_id, vec![message]);
+                        }
+                    },
                 }
             }
+            return;
         }
-        return;
     }
 
     // Reached end node, process the logits
     let logits = match result.data {
-        Some(Data::Logits(FinalModelOutput { data })) => data,
+        Some(Data::Intermediate(IntermediateModelData { mut map })) => {
+            map.remove("logits").unwrap().data
+        }
         _ => unreachable!(),
     };
     let start_idx = logits.len() - state.vocab_size;
@@ -340,100 +361,72 @@ async fn handle_computation_result(result: ComputationMessage, state: &Arc<AppSt
     );
 
     // Update active request
-    let (user_id, should_finalize) = {
-        let mut active_requests = state.active_requests.write().await;
-        let active_request = active_requests.get_mut(&request_id).unwrap();
-        active_request.generated_tokens.push(next_token);
+    {
+        let mut lock = state.graph.write().await;
+        let active_request = lock.active_requests.get_mut(&request_id).unwrap();
+        active_request.tokens.push(next_token);
 
-        (
-            active_request.user_id,
-            active_request.generated_tokens.len() > 20,
-        )
-    };
-
-    if should_finalize {
-        // Generate final output and send to client
-        let output_text = {
-            let active_requests = state.active_requests.read().await;
-            let active_request = active_requests.get(&request_id).unwrap();
-            state
-                .tokenizer
-                .decode(&active_request.generated_tokens, false)
-                .unwrap_or_default()
-        };
-
-        println!("Final result: {output_text}");
-
-        if let Some(tx) = state.worker_clients.read().await.get(&user_id) {
+        let gen_token_len = active_request.tokens.len() - active_request.input_token_len;
+        if gen_token_len <= 20 {
+            // Get worker for start node and send next computation
+            let active_request = active_request.clone();
+            let node_id = lock.graph.start_node_id;
             let message = WebSocketMessage {
-                kind: Some(Kind::InferenceResult(InferenceResult {
-                    message: output_text,
+                kind: Some(Kind::Computation(Computation {
+                    message: Some(ComputationMessage {
+                        node_id: node_id.to_string(),
+                        request_id: request_id.to_string(),
+                        data: Some(Data::First(FirstModelInput {
+                            input_ids: active_request.tokens,
+                        })),
+                    }),
                 })),
             };
 
-            let _ = tx.send(Message::Binary(proto_encode(message).into()));
+            match lock.graph.get_worker(&node_id) {
+                Some(worker_id) => {
+                    lock.downgrade()
+                        .workers
+                        .get(&worker_id)
+                        .unwrap()
+                        .send(Message::Binary(proto_encode(message).into()))
+                        .unwrap();
+                }
+                None => match lock.pending_requests.get_mut(&node_id) {
+                    Some(messages) => messages.push(message),
+                    None => {
+                        let _ = lock.pending_requests.insert(node_id, vec![message]);
+                    }
+                },
+            }
+            return;
         }
 
-        // Clean up active request
-        state.active_requests.write().await.remove(&request_id);
+        // Generate final output and send to client
+        let active_request = lock.active_requests.remove(&request_id).unwrap();
+        let lock = lock.downgrade();
 
-        return;
-    }
+        let output_text = state
+            .tokenizer
+            .decode(
+                &active_request.tokens[active_request.input_token_len..],
+                false,
+            )
+            .unwrap();
 
-    // Generate next token
-    let position = {
-        let active_requests = state.active_requests.read().await;
-        let active_request = active_requests.get(&request_id).unwrap();
-        active_request.input_tokens.len() + active_request.generated_tokens.len() - 1
-    };
+        println!("Final result: {output_text}");
 
-    let input = FirstModelInput {
-        input_ids: vec![next_token],
-        attention_mask: vec![1],
-        position_ids: vec![position as u32],
-    };
-
-    // Get worker for start node and send next computation
-    let start_node_id = state.graph.read().await.start_node_id;
-    let worker_id = match get_worker(state, start_node_id).await {
-        Some(id) => id,
-        None => return,
-    };
-
-    if let Some(tx) = state.worker_clients.read().await.get(&worker_id) {
         let message = WebSocketMessage {
-            kind: Some(Kind::Computation(Computation {
-                message: Some(ComputationMessage {
-                    node_id: start_node_id.to_string(),
-                    request_id: request_id.to_string(),
-                    data: Some(Data::First(input)),
-                }),
+            kind: Some(Kind::InferenceResult(InferenceResult {
+                message: output_text,
             })),
         };
 
-        let _ = tx.send(Message::Binary(proto_encode(message).into()));
-    }
-}
-
-async fn get_worker(state: &Arc<AppState>, node_id: Uuid) -> Option<Uuid> {
-    for i in 1..10 {
-        if let Some(worker_id) = state.graph.read().await.get_worker(&node_id) {
-            return Some(worker_id);
+        if let Some(tx) = lock.workers.get(&active_request.user_id) {
+            tx.send(Message::Binary(proto_encode(message).into()))
+                .unwrap();
         }
-        let retry_in = 10 * i;
-        println!("No worker found for node {node_id}. Retrying in {retry_in}s...");
-        sleep(Duration::from_secs(retry_in)).await;
     }
-    println!("No worker found for node {node_id} after retrying. Giving up...");
-    None
-}
-fn arg_max(values: &[f32]) -> u32 {
-    values
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.total_cmp(b))
-        .map(|(i, _)| i as u32)
-        .unwrap_or(0)
 }
 
 async fn broadcast_connected_users(clients: &HashMap<Uuid, UnboundedSender<Message>>) {
@@ -444,6 +437,21 @@ async fn broadcast_connected_users(clients: &HashMap<Uuid, UnboundedSender<Messa
     };
     let data = proto_encode(message);
     for tx in clients.values() {
-        let _ = tx.send(Message::Binary(data.clone().into()));
+        tx.send(Message::Binary(data.clone().into())).unwrap();
     }
+}
+
+fn arg_max(values: &[f32]) -> u32 {
+    values
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(i, _)| i as u32)
+        .unwrap_or(0)
+}
+
+fn proto_encode<T: ProstMessage>(message: T) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(message.encoded_len());
+    message.encode(&mut buf).unwrap();
+    buf
 }

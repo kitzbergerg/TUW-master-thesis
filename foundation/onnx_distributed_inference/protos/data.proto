@@ -48,7 +48,6 @@ message ComputationMessage {
   oneof data {
     FirstModelInput first = 3;
     IntermediateModelData intermediate = 4;
-    FinalModelOutput logits = 5;
   }
 }
 
@@ -60,8 +59,6 @@ message ExternalDataEntry {
 
 message FirstModelInput {
   repeated uint32 input_ids = 1;
-  repeated uint32 attention_mask = 2;
-  repeated uint32 position_ids = 3;
 }
 
 message IntermediateModelData {
@@ -71,8 +68,4 @@ message IntermediateModelData {
 message IntermediateResult {
   repeated float data = 1;
   repeated uint32 dims = 2;
-}
-
-message FinalModelOutput {
-  repeated float data = 1;
 }

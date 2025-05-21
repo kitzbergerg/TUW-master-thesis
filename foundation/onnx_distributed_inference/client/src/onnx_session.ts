@@ -1,5 +1,5 @@
 import * as ort from 'onnxruntime-web';
-import { ComputationMessage, ComputationMessageSchema, FinalModelOutput, FinalModelOutputSchema, FirstModelInput, IntermediateModelData, IntermediateModelDataSchema, IntermediateResultSchema } from './gen/data_pb';
+import { ComputationMessage, ComputationMessageSchema, FirstModelInput, IntermediateModelData, IntermediateModelDataSchema, IntermediateResultSchema } from './gen/data_pb';
 import { create } from '@bufbuild/protobuf';
 
 const numLayers = 32;
@@ -39,21 +39,23 @@ export class InferenceSession {
         let feeds: OnnxSessionInput = {};
         switch (input.case) {
             case "first": {
-                const seqLen = input.value.inputIds.length;
-                feeds['input_ids'] = new ort.Tensor('int64', BigInt64Array.from(input.value.inputIds.map(BigInt)), [1, seqLen])
-                feeds['attention_mask'] = new ort.Tensor('int64', BigInt64Array.from(input.value.attentionMask.map(BigInt)), [1, seqLen])
-                feeds['position_ids'] = new ort.Tensor('int64', BigInt64Array.from(input.value.positionIds.map(BigInt)), [1, seqLen])
+                // TODO: there is some error when a client disconnects and the next one has to rebuild the case
+                const inputIds = isFirstRequest ? input.value.inputIds : input.value.inputIds.slice(-1);
+                const seqLen = inputIds.length;
+                const attentionMask = new Array(seqLen).fill(1);
+                const positionIds = Array.from(isFirstRequest ? Array(seqLen).keys() : [input.value.inputIds.length - 1]);
+
+                feeds['input_ids'] = new ort.Tensor('int64', BigInt64Array.from(inputIds.map(BigInt)), [1, seqLen])
+                feeds['attention_mask'] = new ort.Tensor('int64', BigInt64Array.from(attentionMask.map(BigInt)), [1, seqLen])
+                feeds['position_ids'] = new ort.Tensor('int64', BigInt64Array.from(positionIds.map(BigInt)), [1, seqLen])
                 break;
             }
             case "intermediate": {
+                // TODO: how to handle missing cache
                 for (const [key, value] of Object.entries(input.value.map)) {
                     feeds[key] = new ort.Tensor('float32', Float32Array.from(value.data), value.dims)
                 }
                 break;
-            }
-            case "logits": {
-                console.error("Logic error: This code should be unreachable");
-                return;
             }
         }
 
@@ -84,36 +86,24 @@ export class InferenceSession {
         this.pastKeyValues.set(requestId, newCache);
 
 
-        let result: { value: IntermediateModelData; case: "intermediate"; } | { value: FinalModelOutput; case: "logits"; };
-        if ('logits' in output) {
-            const value = create(FinalModelOutputSchema, {
-                data: Array.from(await inferenceResults['logits'].getData() as Float32Array)
-            });
-            result = {
-                value,
-                case: "logits"
-            }
-        } else {
-            const value = create(IntermediateModelDataSchema, {
-                map: {}
-            });
-            for (const name in output) {
-                value.map[name] = create(IntermediateResultSchema, {
-                    data: Array.from(await inferenceResults[name].getData() as Float32Array),
-                    dims: inferenceResults[name].dims as number[]
-                })
-            }
-            result = {
-                value,
-                case: "intermediate"
-            }
+        const value = create(IntermediateModelDataSchema, {
+            map: {}
+        });
+        for (const name in output) {
+            value.map[name] = create(IntermediateResultSchema, {
+                data: Array.from(await inferenceResults[name].getData() as Float32Array),
+                dims: inferenceResults[name].dims as number[]
+            })
         }
 
-        console.log("Inference response: ", result)
+        console.log("Inference response: ", value.map)
         return create(ComputationMessageSchema, {
             nodeId: message.nodeId,
             requestId: message.requestId,
-            data: result
+            data: {
+                value,
+                case: "intermediate"
+            }
         });
     }
 }
