@@ -32,6 +32,8 @@ use crate::protos::{
     web_socket_message::Kind,
 };
 
+const SYSTEM_PROMPT: &str = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful answers to the user's questions.";
+
 // Main application state
 struct AppState {
     // use Mutex instead of RwLock since basically every access is write
@@ -410,16 +412,18 @@ async fn handle_message(data: Bytes, user_id: Uuid, state: &Arc<AppState>) {
     }
 }
 
-async fn handle_inference_request(text: String, user_id: Uuid, state: &Arc<AppState>) {
+async fn handle_inference_request(prompt: String, user_id: Uuid, state: &Arc<AppState>) {
     let request_id = Uuid::new_v4();
     tracing::info!(
-        "Scheduling inference request {request_id} for user {user_id} with prompt '{text}'",
+        "Scheduling inference request {request_id} for user {user_id} with prompt '{prompt}'",
     );
+
+    let message = format!("System: {SYSTEM_PROMPT}\nUser: {prompt}\nAssistant:");
 
     // Tokenize input text
     let input_ids = state
         .tokenizer
-        .encode(text, false)
+        .encode(message, false)
         .unwrap()
         .get_ids()
         .to_vec();
@@ -483,7 +487,6 @@ async fn handle_computation_result(
     let start_idx = logits.len() - state.vocab_size;
     let logits_slice = &logits[start_idx..];
     let next_token = arg_max(logits_slice);
-
     tracing::debug!(
         "Generated token: {}, Decoded: {}",
         next_token,
@@ -500,55 +503,60 @@ async fn handle_computation_result(
         };
         active_request.tokens.push(next_token);
 
-        let gen_token_len = active_request.tokens.len() - active_request.input_token_len;
-        if gen_token_len <= 20 {
-            // Send next computation
-            let active_request = active_request.clone();
-            let node_id = lock.structure.start_node_id;
+        // Tokens of 'User:', 'Assistant:' and 'System:'
+        let should_stop_generating = matches!(
+            active_request.tokens.as_slice(),
+            [.., 12982, 25] | [.., 48902, 25] | [.., 11964, 25]
+        );
+        if should_stop_generating {
+            // Generate final output and send to client
+            let active_request = lock.inference_requests.remove(&request_id).unwrap();
+            let output_text = state
+                .tokenizer
+                .decode(
+                    &active_request.tokens
+                        [active_request.input_token_len..active_request.tokens.len() - 2],
+                    false,
+                )
+                .unwrap();
+            tracing::info!("Inference result for request {request_id}: {output_text}");
+
             let message = WebSocketMessage {
-                kind: Some(Kind::Computation(Computation {
-                    message: Some(ComputationMessage {
-                        node_id: node_id.to_string(),
-                        request_id: request_id.to_string(),
-                        data: Some(Data::First(FirstModelInput {
-                            input_ids: active_request.tokens,
-                        })),
-                    }),
+                kind: Some(Kind::InferenceResult(InferenceResult {
+                    message: output_text,
                 })),
             };
-            lock.schedule_computation(
-                node_id,
-                ActiveComputation {
-                    original_user_id: active_request.original_user_id,
-                    message,
-                },
-            );
+            if let Some(original_user_id) = lock.workers.get(&active_request.original_user_id) {
+                original_user_id
+                    .sink
+                    .send(Message::Binary(proto_encode(&message).into()))
+                    .unwrap();
+            }
+            lock.invalidate_cache(Some(request_id));
             return;
         }
 
-        // Generate final output and send to client
-        let active_request = lock.inference_requests.remove(&request_id).unwrap();
-        let output_text = state
-            .tokenizer
-            .decode(
-                &active_request.tokens[active_request.input_token_len..],
-                false,
-            )
-            .unwrap();
-        tracing::info!("Inference result for request {request_id}: {output_text}");
-
+        // Send next computation
+        let active_request = active_request.clone();
+        let node_id = lock.structure.start_node_id;
         let message = WebSocketMessage {
-            kind: Some(Kind::InferenceResult(InferenceResult {
-                message: output_text,
+            kind: Some(Kind::Computation(Computation {
+                message: Some(ComputationMessage {
+                    node_id: node_id.to_string(),
+                    request_id: request_id.to_string(),
+                    data: Some(Data::First(FirstModelInput {
+                        input_ids: active_request.tokens,
+                    })),
+                }),
             })),
         };
-        if let Some(original_user_id) = lock.workers.get(&active_request.original_user_id) {
-            original_user_id
-                .sink
-                .send(Message::Binary(proto_encode(&message).into()))
-                .unwrap();
-        }
-        lock.invalidate_cache(Some(request_id));
+        lock.schedule_computation(
+            node_id,
+            ActiveComputation {
+                original_user_id: active_request.original_user_id,
+                message,
+            },
+        );
     }
 }
 
