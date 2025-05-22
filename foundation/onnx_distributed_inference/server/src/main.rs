@@ -503,19 +503,23 @@ async fn handle_computation_result(
         };
         active_request.tokens.push(next_token);
 
-        // Tokens of 'User:', 'Assistant:' and 'System:'
-        let should_stop_generating = matches!(
-            active_request.tokens.as_slice(),
-            [.., 12982, 25] | [.., 48902, 25] | [.., 11964, 25]
-        );
-        if should_stop_generating {
+        // Tokens sequences to stop at
+        let stop_sequence_len = match active_request.tokens.as_slice() {
+            [.., 12982, 25] => 2,  // User:
+            [.., 48902, 25] => 2,  // Assistant:
+            [.., 11964, 25] => 2,  // System:
+            [.., 198, 50256] => 2, // newline + EOS
+            [.., 50256] => 1,      // EOS
+            _ => 0,
+        };
+        if stop_sequence_len > 0 {
             // Generate final output and send to client
             let active_request = lock.inference_requests.remove(&request_id).unwrap();
             let output_text = state
                 .tokenizer
                 .decode(
-                    &active_request.tokens
-                        [active_request.input_token_len..active_request.tokens.len() - 2],
+                    &active_request.tokens[active_request.input_token_len
+                        ..active_request.tokens.len() - stop_sequence_len],
                     false,
                 )
                 .unwrap();
