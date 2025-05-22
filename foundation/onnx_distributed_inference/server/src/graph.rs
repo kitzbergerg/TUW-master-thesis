@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use uuid::Uuid;
-use websocket_messages::websocket::ModelConfig;
+
+use crate::protos::ModelConfig;
 
 #[derive(Clone, Debug)]
 pub struct Node {

@@ -363,6 +363,7 @@ dependencies = [
  "axum",
  "futures-util",
  "prost",
+ "prost-build",
  "serde",
  "serde_json",
  "tokenizers",
@@ -372,7 +373,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "websocket_messages",
 ]
 
 [[package]]
@@ -2178,14 +2178,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37493cadf42a2a939ed404698ded7fb378bf301b5011f973361779a3a74f8c93"
 dependencies = [
  "rustls-pki-types",
-]
-
-[[package]]
-name = "websocket_messages"
-version = "0.1.0"
-dependencies = [
- "prost",
- "prost-build",
 ]
 
 [[package]]

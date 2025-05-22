@@ -20,17 +20,17 @@ use tokio::sync::{Mutex, mpsc::UnboundedSender};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
-use websocket_messages::websocket::{
-    Computation, ComputationMessage, ConnectedUsers, ExternalDataEntry, FirstModelInput,
-    InferenceRequest, InferenceResult, Initialize, IntermediateModelData, ModelConfig,
-    WebSocketMessage,
-};
-use websocket_messages::websocket::{InitializeDone, computation_message::Data};
-use websocket_messages::websocket::{InvalidateCache, web_socket_message::Kind};
 
 mod graph;
+mod protos;
 
 use crate::graph::{Node, StructuralGraph};
+use crate::protos::{
+    Computation, ComputationMessage, ConnectedUsers, ExternalDataEntry, FirstModelInput,
+    InferenceRequest, InferenceResult, Initialize, InitializeDone, IntermediateModelData,
+    InvalidateCache, ModelConfig, WebSocketMessage, computation_message::Data,
+    web_socket_message::Kind,
+};
 
 // Main application state
 struct AppState {
