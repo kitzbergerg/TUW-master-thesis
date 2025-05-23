@@ -2,6 +2,8 @@ import * as ort from 'onnxruntime-web';
 import { ComputationMessage, ComputationMessageSchema, FirstModelInput, IntermediateModelData, IntermediateModelDataSchema, IntermediateResultSchema } from './gen/data_pb';
 import { create } from '@bufbuild/protobuf';
 
+// ort.env.webgpu.profiling = { mode: 'default' }
+
 const numLayers = 32;
 const hiddenSize = 2560;
 const numHeads = 32;
@@ -68,10 +70,9 @@ export class InferenceSession {
             }
         } else {
             const cache = this.pastKeyValues.get(requestId);
-            for (let layer = layerStart; layer < layerEnd; layer++) {
-                feeds[`past_key_values.${layer}.key`] = cache[`present.${layer}.key`];
-                feeds[`past_key_values.${layer}.value`] = cache[`present.${layer}.value`];
-            }
+            Object.entries(cache).forEach(([name, value]) => {
+                feeds[name.replace("present.", "past_key_values.")] = value;
+            })
         }
         console.log("Model input: ", feeds)
         const inferenceResults = await this.session.run(feeds);
@@ -81,6 +82,10 @@ export class InferenceSession {
         const newCache = Object.fromEntries(split.cache);
         const output = Object.fromEntries(split.output);
 
+        // TODO: figure out if you can make onnxruntime reuse buffers instead of discarding them
+        // see for details: https://github.com/huggingface/transformers.js/issues/860#issuecomment-2360586901
+        const pastKvCache = this.pastKeyValues.get(requestId);
+        if (pastKvCache) Object.values(pastKvCache).forEach((tensor) => tensor.dispose());
         this.pastKeyValues.set(requestId, newCache);
 
 
@@ -91,7 +96,8 @@ export class InferenceSession {
             value.map[name] = create(IntermediateResultSchema, {
                 data: Array.from(await inferenceResults[name].getData() as Float32Array),
                 dims: inferenceResults[name].dims as number[]
-            })
+            });
+            inferenceResults[name].dispose()
         }
 
         console.log("Inference response: ", value.map)
@@ -107,8 +113,10 @@ export class InferenceSession {
 
     invalidateCache(requestId?: string) {
         if (requestId == null) {
+            Array.from(this.pastKeyValues.values()).flatMap(el => Object.values(el)).forEach((tensor) => tensor.dispose());
             this.pastKeyValues.clear();
         } else {
+            Object.values(this.pastKeyValues.get(requestId)).forEach((tensor) => tensor.dispose());
             this.pastKeyValues.delete(requestId);
         }
     }
