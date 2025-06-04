@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 }
                 case 'inferenceResult':
-                    displayMessage(data.value.message);
+                    chatContainer.textContent += data.value.message;
                     break;
                 case 'invalidateCache':
                     session.invalidateCache(data.value.requestId);
@@ -112,18 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Clear input field
         messageInput.innerText = '';
+        // Clear chat container
+        chatContainer.textContent = '';
     });
-
-    // Display message in chat container
-    function displayMessage(message: string) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message';
-        messageDiv.textContent = message;
-
-        // Add message to chat container
-        chatContainer.appendChild(messageDiv);
-
-        // Auto-scroll to the bottom
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
 });

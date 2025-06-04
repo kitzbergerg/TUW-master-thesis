@@ -390,13 +390,13 @@ async fn handle_message(data: Bytes, user_id: Uuid, state: &Arc<AppState>) {
         Kind::InitializeDone(InitializeDone { node_id }) => {
             tracing::info!("Worker {user_id} ready for node {node_id}");
             let node_id = Uuid::parse_str(&node_id).unwrap();
-            let mut lock = state.graph.lock().await;
-            lock.assigned_nodes.get_mut(&node_id).unwrap().1 = Status::Available;
+            let graph = &mut *state.graph.lock().await;
+            graph.assigned_nodes.get_mut(&node_id).unwrap().1 = Status::Available;
 
-            if let Some(pending_requests) = lock.pending_requests.remove(&node_id) {
+            if let Some(pending_requests) = graph.pending_requests.remove(&node_id) {
                 tracing::info!("Processing pending requests...");
                 pending_requests.into_iter().for_each(|computation| {
-                    lock.send_computation(user_id, computation);
+                    graph.send_computation(user_id, computation);
                 });
             }
         }
@@ -447,10 +447,10 @@ async fn handle_computation_result(
     tracing::debug!("Worker {worker_id} computed request {request_id} for node {node_id}");
 
     {
-        let mut lock = state.graph.lock().await;
+        let graph = &mut *state.graph.lock().await;
 
-        if let Some(next_node_id) = lock.structure.get_next_node(&node_id) {
-            let original_user_id = match lock.inference_requests.get(&request_id) {
+        if let Some(next_node_id) = graph.structure.get_next_node(&node_id) {
+            let original_user_id = match graph.inference_requests.get(&request_id) {
                 Some(active_request) => active_request.original_user_id,
                 // user disconnected or request was cancelled
                 None => return,
@@ -466,7 +466,7 @@ async fn handle_computation_result(
                 })),
             };
 
-            lock.schedule_computation(
+            graph.schedule_computation(
                 next_node_id,
                 ActiveComputation {
                     original_user_id,
@@ -487,16 +487,13 @@ async fn handle_computation_result(
     let start_idx = logits.len() - state.vocab_size;
     let logits_slice = &logits[start_idx..];
     let next_token = arg_max(logits_slice);
-    tracing::debug!(
-        "Generated token: {}, Decoded: {}",
-        next_token,
-        state.tokenizer.decode(&[next_token], false).unwrap()
-    );
+    tracing::debug!("Generated token: {}", next_token);
 
     // Update active request
     {
-        let mut lock = state.graph.lock().await;
-        let active_request = match lock.inference_requests.get_mut(&request_id) {
+        let graph = &mut *state.graph.lock().await;
+
+        let active_request = match graph.inference_requests.get_mut(&request_id) {
             Some(req) => req,
             // user disconnected or request was cancelled
             None => return,
@@ -504,60 +501,63 @@ async fn handle_computation_result(
         active_request.tokens.push(next_token);
 
         // Tokens sequences to stop at
-        let stop_sequence_len = match active_request.tokens.as_slice() {
-            [.., 12982, 25] => 2,  // User:
-            [.., 48902, 25] => 2,  // Assistant:
-            [.., 11964, 25] => 2,  // System:
-            [.., 198, 50256] => 2, // newline + EOS
-            [.., 50256] => 1,      // EOS
-            _ => 0,
+        let message_to_send = match active_request.tokens.as_slice() {
+            // Inference session done. Stop sequence is one of:
+            // User:
+            // Assistant:
+            // System:
+            // EOS
+            [.., 12982, 25] | [.., 48902, 25] | [.., 11964, 25] | [.., 50256] => {
+                let _ = graph.inference_requests.remove(&request_id).unwrap();
+                graph.invalidate_cache(Some(request_id));
+                return;
+            }
+            // Might be stop sequence, do not send for now.
+            [.., 12982] | [.., 48902] | [.., 11964] => None,
+            // Was not stop sequence send both tokens.
+            [.., 12982, _] | [.., 48902, _] | [.., 11964, _] => Some(
+                state
+                    .tokenizer
+                    .decode(
+                        &active_request.tokens[&active_request.tokens.len() - 2..],
+                        false,
+                    )
+                    .unwrap(),
+            ),
+            _ => Some(state.tokenizer.decode(&[next_token], false).unwrap()),
         };
-        if stop_sequence_len > 0 {
-            // Generate final output and send to client
-            let active_request = lock.inference_requests.remove(&request_id).unwrap();
-            let output_text = state
-                .tokenizer
-                .decode(
-                    &active_request.tokens[active_request.input_token_len
-                        ..active_request.tokens.len() - stop_sequence_len],
-                    false,
-                )
-                .unwrap();
-            tracing::info!("Inference result for request {request_id}: {output_text}");
+
+        if let Some(message) = message_to_send {
+            tracing::debug!("Decoded token(s): {}", message);
 
             let message = WebSocketMessage {
-                kind: Some(Kind::InferenceResult(InferenceResult {
-                    message: output_text,
-                })),
+                kind: Some(Kind::InferenceResult(InferenceResult { message })),
             };
-            if let Some(original_user_id) = lock.workers.get(&active_request.original_user_id) {
+            if let Some(original_user_id) = graph.workers.get(&active_request.original_user_id) {
                 original_user_id
                     .sink
                     .send(Message::Binary(proto_encode(&message).into()))
                     .unwrap();
             }
-            lock.invalidate_cache(Some(request_id));
-            return;
         }
-
         // Send next computation
-        let active_request = active_request.clone();
-        let node_id = lock.structure.start_node_id;
+        let node_id = graph.structure.start_node_id;
         let message = WebSocketMessage {
             kind: Some(Kind::Computation(Computation {
                 message: Some(ComputationMessage {
                     node_id: node_id.to_string(),
                     request_id: request_id.to_string(),
                     data: Some(Data::First(FirstModelInput {
-                        input_ids: active_request.tokens,
+                        input_ids: active_request.tokens.clone(),
                     })),
                 }),
             })),
         };
-        lock.schedule_computation(
+        let original_user_id = active_request.original_user_id;
+        graph.schedule_computation(
             node_id,
             ActiveComputation {
-                original_user_id: active_request.original_user_id,
+                original_user_id,
                 message,
             },
         );
