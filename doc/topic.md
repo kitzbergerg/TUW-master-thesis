@@ -53,3 +53,7 @@ Instead of requiring expensive GPU clusters, LLM inference can be split across m
 -   **Backend**: Webserver managing workload based on connected clients
 -   **Communication**: WebSocket-based coordination with efficient binary protocols
 -   **Model Splitting**: Partitioning transformer models across computational graph boundaries
+
+## Experiments
+
+See [experiments](experiments.md) for details.

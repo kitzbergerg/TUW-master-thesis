@@ -1,10 +1,13 @@
-Have a look at related work for:
+# Related Work
 
--   WeInfer: Unleashing the Power of WebGPU on LLM Inference in Web Browsers
--   Large Language Model Partitioning for Low-Latency Inference at the Edge
--   EdgeShard: Efficient LLM Inference via Collaborative Edge Computing
+## LLM Inference research coverage
 
-## Summaries
+|               | Centralized                   | Distributed                         |
+| ------------- | ----------------------------- | ----------------------------------- |
+| Native        | explored (Ollama, vLLM, ...)  | good (EdgeShard, LinguaLinked, ...) |
+| Browser-based | decent (WebLLM, WeInfer, ...) | nothing                             |
+
+## Paper Summaries
 
 -   Distributed inference and fine-tuning of large language models over the internet  
     https://arxiv.org/abs/2312.08361  
@@ -123,3 +126,17 @@ Have a look at related work for:
     2/10 - not yet published; lots of unnecessary bloat; difficult to read and figure out what's going on
 
     split model between client and server
+
+## To be further explored
+
+Have a look at the following for additional related work:
+
+-   WeInfer: Unleashing the Power of WebGPU on LLM Inference in Web Browsers
+-   Large Language Model Partitioning for Low-Latency Inference at the Edge
+-   EdgeShard: Efficient LLM Inference via Collaborative Edge Computing
+
+## Other
+
+WASM LLaMA: https://github.com/ngxson/wllama
+WebGPU: https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API
+ONNX web: https://onnxruntime.ai/docs/tutorials/web/

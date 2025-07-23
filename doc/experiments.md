@@ -1,4 +1,6 @@
-## Possible experiments
+# Experiments
+
+## Ideas
 
 -   Different models with different sizes (e.g. 1B/7B/70B)
 -   Varying and heterogeneous hardware (high/low end GPUs, pure CPU)

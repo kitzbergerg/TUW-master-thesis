@@ -27,3 +27,7 @@
 -   Latency vs Throughput (relevant for batching, cold-start, repartitioning, ...)
 -   Single vs Parallel inference requests (relevant for kv cache and buffer management, batching, ...)
 -   Sequential inference vs Pipeline parallelism (i.e. iter-operator vs intra-operator parallelism; relevant for idle resources, throughput, ...; consider network speed, ...)
+
+## Other
+
+WebGPU inserts bounds check. They make computation slower. Disable by running chrome with `--enable-dawn-features=disable_robustness`. See [details](https://github.com/mlc-ai/web-stable-diffusion/?tab=readme-ov-file#comparison-with-native-gpu-runtime-limitations-and-opportunities).
