@@ -1,85 +1,55 @@
-# Federated Inference Using WebAssembly (WASM)
+# Democratizing LLM Inference Through Browser-Based Federated Computing
 
 ## Overview
 
-Federated inference allows multiple distributed devices to collaboratively perform machine learning inference without requiring centralized computation.
-This approach leverages WebAssembly (WASM) to enable users to contribute computational resources through their browsers.
-Users wishing to utilize a model must first contribute by computing tasks for other users, leveraging WASM alongside WebGPU or CPU execution.
+Large Language Models (LLMs) are currently accessible primarily to organizations with substantial computational resources. This thesis explores democratizing access to large models by distributing inference across web browsers using WebAssembly (WASM), enabling anyone to contribute resources and access models that would otherwise be computationally infeasible.
 
-## Key Idea
+## Core Idea
 
-Instead of running inference on a single device (which may be slow or infeasible due to model size), inference tasks can be distributed across connected clients, improving efficiency and scalability.
-A potential application is serving a large language model (e.g., LLaMA) across multiple instances, distributing workloads dynamically.
+Instead of requiring expensive GPU clusters, LLM inference can be split across multiple browser instances using WebAssembly and WebGPU. While large open models like LLaMA 70B, DeepSeek R1, or Kimi K2 are publicly available, they remain inaccessible to individuals due to their computational requirements (often exceeding 100GB of VRAM). By leveraging distributed browser-based computing, users can contribute their device's resources to collectively serve these models, enabling anyone to test and interact with state-of-the-art LLMs without requiring substantial hardware investments.
 
-## Advantages
+## Key Research Areas
 
--   Accessibility: WASM runs on various platforms, including browsers and edge devices.
--   Ease of Deployment: Users only need to visit a website to participate.
--   Privacy-Preserving: Computation can be split across nodes to limit data exposure.
+### Distributed Systems & Orchestration
 
-## Challenges
+**Tasks**
 
--   Scientific Contribution: Requires validation against existing distributed inference methods.
--   Task Distribution: Managing load balancing, failures, and varying computational capabilities.
--   Model Partitioning: Ensuring efficient model distribution and inference performance.
+-   Browser-based client coordination and resource discovery
+-   Dynamic workload distribution and load balancing strategies
+-   Fault tolerance and graceful handling of client disconnections
+-   Scalable architecture for heterogeneous device capabilities
+-   Real-time adaptation to changing client pool composition
 
-## Research Questions
+**Research questions**
 
--   How can computation be effectively distributed across browser instances?
--   What strategies optimize the allocation of computational tasks based on client device capabilities and network conditions?
--   What incentive mechanisms ensure fair and sustainable resource contribution from participants?
+-   How can workload be optimally distributed across heterogeneous web-based devices?
+-   What client information is necessary for effective workload management decisions?
+-   How can the system adapt to dynamic changes in available computational resources?
 
--   How can large language models be effectively partitioned for distributed inference across browser instances?
--   How does federated inference using WASM compare to running models natively? (E.g. compare federated with swapping model parts in GPU)
--   What are the limitations and advantages of browser-based inference compared to containerized environments?
+### LLM-Specific Optimizations
 
-## Split
+**Tasks**
 
-Software engineering:
+-   Transformer model partitioning across computational graph boundaries
+-   Distributed KV-cache management for autoregressive generation
+-   WebGPU acceleration and memory-efficient tensor operations
+-   Model quantization strategies for diverse browser environments
+-   Optimized communication protocols for large tensor transfers
 
--   task splitting
-    -   How to handle low number of connected users?
-    -   How to handle dropouts?
-    -   How to distribute workloads and rebalance?
-    -   How to find best assignment of tasks to nodes? How to handle slower/faster participants? How to handle network latency? Something like 'task x node' matrix to find best assignments?
--   computational graph (i.e in which order to compute what and where to send the result)
-    -   How can computation be distributed and gathered?
-    -   DAG?
--   plugin system
-    -   Should we build a plugin system to allow users to distribute arbitrary workloads?
-    -   What are the interfaces? WASM modules?
-    -   How can a webserver serve arbitrary wasm modules and data for computation? Websockets? What about larger data packets like AI models?
--   computational rewards
-    -   How can we ensure that only users that contribute can use resources?
-    -   How to ensure fair distribution?
-    -   How to calculate rewards (some users have different hardware, e.g. GPU vs CPU for AI)?
+**Research questions**
 
-Data science:
+-   What are the optimal model partitioning strategies for different network topologies and device configurations?
+-   What is the best approach for managing a distributed KV-cache?
+-   How can model execution be optimized for the browser (WebGPU, buffer management, quantization, ...)?
 
--   implement plugin for federated inference
--   How to keep model across sessions? Users shouldn't have to download large amounts of data multiple times. Use File System Access API or IndexedDB.
--   How can we optimally split an ONNX model for federated inference? ONNX is DAG already, can we just reuse it?
--   How does a cold start compare to a running instance? I.e. for a cold start all users would have to download model weights.
--   What is a good model size (MBs vs GBs)?
-    -   Probably depends on focus: Long running instances prefer large models (don't care about long download), short instances prefer small models (faster download)
-    -   Does it make sense to serve large models (>4GB)? How can we work with WASMs 4GB limit in this case? Move to GPU in chunks?
-    -   Use quantization?
--   Performance:
-    -   Caching:
-        -   Important for LLMs since autoregressive.
-        -   Is it possible to implement a variant with attention cache? This would also significantly reduce amount of data to be transferred. Might be complicated, there prob is nothing like that for WASM yet.
-            -   Llama inputs/outputs kv. Onnxruntime-web supports keeping session outputs in GPU memory. Therefore by using onnxruntime this might not be as complicated.
-        -   What about keeping a cache on the server? That way workers only have to send newly computed weights? When a worker drops out the whole server cache is sent to a new worker, otherwise a worker with intact cache is used only forwarding new data.
-    -   Which libraries to use? wasm-nn, onnx-web, tensorflow.js, ...
-    -   How low-level do we need to go? Is it ok to just use libraries or implement ML-framework from scratch? What about compiling frameworks like BLAS to WASM? How to optimally utilize GPU?
+### Cross-Domain Research Questions
 
-## Test data
+-   How does browser-based federated inference compare to traditional centralized approaches in terms of latency, throughput, and resource utilization?
+-   How can communication be optimized for varying network conditions (binary protocols, compression, transfer of large tensors, websockets)?
 
--   AI models
--   EDDS paper: https://github.com/dilina-r/mcts-rec
--   Any other highly parallelizable task? (e.g. use framework instead of openmp)
+## Technical Implementation
 
-## Notes
-
--   Maybe interesting for edge devices? Since wasm essentially runs anywhere
--   Maybe test different platform (i.e. PC with GPU, Laptop, Mobile, ...). See how different combinations behave (PC/Laptop/Mobile only, mix, ...).
+-   **Frontend**: WebAssembly with WebGPU/CPU execution using ONNX Runtime Web
+-   **Backend**: Webserver managing workload based on connected clients
+-   **Communication**: WebSocket-based coordination with efficient binary protocols
+-   **Model Splitting**: Partitioning transformer models across computational graph boundaries
